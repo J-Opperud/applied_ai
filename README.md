@@ -133,3 +133,105 @@ Poor search result:
 - Bad query
 - insufficient documents
   _____________________________________________
+
+## Chunk and Compare
+
+This project uses a pre-trained AI embedding model in a Python program to search a real PDF manual and compare two different chunking strategies.
+
+The document used was the Hobart Hand Wrap Station Operation and Care manual.
+
+                    Your Python program
+                           │
+                           ▼
+                  SentenceTransformer
+                           │
+                           ▼
+                    all-MiniLM-L6-v2
+                           │
+             ┌─────────────┴─────────────┐
+             ▼                           ▼
+       PDF document                  Your query
+             │                           │
+             ▼                           ▼
+       text chunks                    vector
+             │                           │
+             └─────────────┬─────────────┘
+                           ▼
+                  similarity comparison
+                           │
+                           ▼
+                    top 2 results
+
+
+The PDF is first converted into text.
+
+text = extract_pdf_text(PDF_FILE)
+
+The document is divided using two different strategies.
+
+Fixed-size:
+
+300 characters per chunk
+
+50 character overlap
+
+Paragraph/section-based:
+
+chunks are created around logical sections of the manual
+
+Each chunk is converted into a numerical vector using the pre-trained model.
+
+embeddings = model.encode(chunks)
+
+The user's query is also converted into a vector.
+
+query_embedding = model.encode(query)
+
+The query vector is compared against the vectors for the document chunks using similarity scores.
+
+Fixed-size chunk      → 0.6550
+Paragraph chunk       → 0.6271
+
+
+The program selects the two highest-scoring chunks for each query.
+
+The results are displayed with their similarity scores and the actual text from the manual.
+
+Three queries were tested:
+
+How should the hand wrap station be operated?
+
+What safety precautions should be followed?
+
+How should the hand wrap station be cleaned and maintained?
+
+The results showed that, for these three queries, the fixed-size strategy produced the higher average similarity score:
+
+Fixed-size:       0.4867
+Paragraph-based:  0.4161
+
+
+The experiment demonstrated that chunking strategy can have a significant effect on retrieval quality. Fixed-size chunks performed better overall for this particular document and these queries, although some of the paragraph-based results also returned highly relevant information.
+
+One important lesson from the experiment was that a higher similarity score does not automatically mean the result is better. The actual retrieved text also needs to be examined to determine whether it answers the question.
+
+This project represents a small retrieval system that follows the basic architecture:
+
+represent → retrieve → rank → present
+
+It can be expanded into larger systems for:
+
+searching company documentation
+
+searching PDFs and manuals
+
+finding relevant support articles
+
+retrieving context for an LLM
+
+RAG (Retrieval-Augmented Generation)
+
+recommendation systems
+
+document search and knowledge bases
+______________________________________________________
