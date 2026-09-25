@@ -10,20 +10,7 @@ PDF_FILE = "617-625A1_manual.pdf"
 
 
 
-def clean_text(text):
-    # Replace repeated whitespace with a single space
-    lines = text.splitlines()
 
-    cleaned_lines = []
-
-    for line in lines:
-        line = line.strip()
-
-        if line:
-            cleaned_lines.append(line)
-
-    # Reconstruct paragraphs
-    return "\n\n".join(cleaned_lines)
 
 # ---------------------------------------------------------
 # 1. Extract text from the PDF
@@ -41,7 +28,22 @@ def extract_pdf_text(filename):
             pages.append(text)
 
     return "\n\n".join(pages)
+# ---------------------------------------------------------
+#cleaning text to remove large white spaces like pictures and graphs 
+# ---------------------------------------------------------
 
+def clean_text(text):
+    lines = text.splitlines()
+    cleaned_lines = []
+
+    for line in lines:
+        line = line.strip()
+
+        if line:
+            cleaned_lines.append(line)
+
+    # Turn the remaining lines into normal paragraphs
+    return "\n\n".join(cleaned_lines)
 
 # ---------------------------------------------------------
 # 2. Fixed-size chunking
@@ -73,17 +75,51 @@ def fixed_size_chunks(text, chunk_size=300, overlap=50):
 # ---------------------------------------------------------
 
 def paragraph_chunks(text):
-    paragraphs = text.split("\n\n")
+    lines = text.splitlines()
 
     chunks = []
+    current_chunk = ""
 
-    for paragraph in paragraphs:
-        paragraph = " ".join(paragraph.split())
+    section_headings = {
+        "GENERAL",
+        "W3-2 AND W3-2C FILM LOADING AND THREADING",
+        "CHANGING FILM WIDTHS",
+        "625A FILM LOADING AND THREADING",
+        "WRAPPING PACKAGES",
+        "CLEANING",
+        "MAINTENANCE"
+    }
 
-        if paragraph:
-            chunks.append(paragraph)
+    for line in lines:
+        line = line.strip()
+
+        if not line:
+            continue
+
+        # Normalize the line for checking headings
+        heading_check = line.upper()
+
+        # Start a new chunk when we reach a section heading
+        if heading_check in section_headings:
+
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+
+            current_chunk = line
+
+        else:
+            if current_chunk:
+                current_chunk += " " + line
+            else:
+                current_chunk = line
+
+    # Add final chunk
+    if current_chunk:
+        chunks.append(current_chunk.strip())
 
     return chunks
+
+
 
 
 # ---------------------------------------------------------
@@ -136,6 +172,16 @@ def main():
     print("\nReading PDF...")
     text = extract_pdf_text(PDF_FILE)
     text = clean_text(text)
+
+    print("\n" + "=" * 70)
+    print("RAW CLEANED TEXT")
+    print("=" * 70)
+
+    print(text[:5000])
+
+    print("=" * 70)
+    input("Press Enter to continue...")
+
 
     print(f"Extracted approximately {len(text):,} characters.")
 
@@ -243,31 +289,34 @@ def main():
 
     print("\nWritten Analysis:")
     print("""
-For this document, paragraph-based chunking is expected to provide
-better search quality because the Hobart hand wrap station manual is
-organized into logical sections and instructions. Paragraph-based
-chunks preserve complete ideas and keep related instructions together.
+Written Analysis:
 
-The fixed-size strategy is simple and predictable, but it can split a
-sentence or procedure in the middle. This can cause a retrieved chunk
-to contain only part of the information needed to answer a query.
-Fixed-size chunks can also include pieces of two unrelated topics.
+In this experiment, the fixed-size chunking strategy produced the
+higher average similarity score. The fixed-size chunks had an average
+top-2 similarity score of 0.4867, compared with 0.4161 for the
+paragraph-based chunks.
 
-Paragraph-based chunking better preserves the natural structure of
-the manual. For example, information about operation, safety, cleaning,
-and maintenance can remain together instead of being divided simply
-because a character limit was reached.
+The results were fairly close for the operation query, with scores of
+0.5405 for fixed-size chunking and 0.5373 for paragraph-based
+chunking. For the safety query, fixed-size chunking produced a higher
+score of 0.4018 compared with 0.3131. For the cleaning and maintenance
+query, fixed-size chunking also produced a higher score of 0.6550
+compared with 0.6271.
 
-The fixed-size approach can still be useful when documents contain
-very long paragraphs or when consistent chunk sizes are important.
-However, for this relatively short instruction manual, preserving
-paragraph boundaries provides more meaningful context for semantic
-search.
+One reason fixed-size chunking performed well is that the 300-character
+chunks can focus on a specific part of an instruction while still
+using 50 characters of overlap to preserve some context between
+chunks. Paragraph-based chunks preserve larger sections of the
+document, but larger chunks can contain additional information that
+is not directly related to the query.
 
-Therefore, for this particular document, paragraph-based chunking is
-the strategy I would choose. The search results and similarity scores
-above provide the practical comparison between the two approaches.
+The results demonstrate that there is no single chunking strategy that
+is always best. The best approach depends on the structure of the
+document and the type of information being searched. For this
+particular manual and these three queries, fixed-size chunking produced
+the stronger retrieval scores.
 """)
+
 
     print("=" * 70)
 
