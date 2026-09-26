@@ -318,3 +318,110 @@ A simple ChromaDB exercise, architecturally building the first half of a RAG sys
 
 documents → embeddings → retrieval → metadata filtering.
 ____________________________________________________________________________
+
+## search_tool
+
+ Streamlit semantic search application that uses ChromaDB to search course documents by meaning rather than exact keywords.
+
+Architecture
+
+Course Documents
+      │
+      ▼
+ docs/ folder
+      │
+      ▼
+load_and_chunk()
+      │
+      ▼
+   ChromaDB
+      │
+      ├── stores text
+      ├── stores source metadata
+      └── creates vector representations
+              │
+              ▼
+         User Query
+              │
+              ▼
+       Semantic Search
+              │
+              ▼
+       Ranked Results
+              │
+              ▼
+        Streamlit UI
+
+- How it works
+
+    Loads documents
+
+    chunks = load_and_chunk("docs")
+
+    Stores them in ChromaDB
+
+    collection.upsert(...)
+
+    Turns the user's question into a semantic search
+
+    results = collection.query(
+        query_texts=[query],
+        n_results=n_results,
+    )
+
+    Optionally filters by source
+
+    where={"source": {"$in": selected_sources}}
+
+    Ranks results using distance
+
+    Document A → 0.32
+    Document B → 0.61
+    Document C → 1.12
+
+    Lower distance generally means greater similarity.
+
+    Displays results
+
+    Showing 5 of 23 total documents
+
+    Python Basics — chunk 3
+    🟢 High (dist: 0.32)
+
+    Python uses indentation to define...
+    📖 Show full text
+    🔎 Similar to this
+
+- Assignment features
+
+    Source filtering
+
+    Result count
+
+    150-character previews
+
+    Expandable full text
+
+    Relevance indicators
+
+    Similar-to-this search
+
+    Unique source-file count
+
+
+
+ingest → represent → retrieve → rank → present
+
+This is the foundation of:
+
+    Documentation search
+
+    PDF search
+
+    Knowledge bases
+
+    LLM context retrieval
+
+    Recommendation systems
+
+The application is essentially a small retrieval system—the same retrieval layer that can later be connected to an LLM for RAG.
