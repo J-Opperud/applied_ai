@@ -1,0 +1,1984 @@
+ Knowledge Base
+
+Objective: Build a persistent ChromaDB knowledge base with content from this course, demonstrating the full add-and-query workflow with metadata filtering.
+
+Time: 30 minutes
+
+What you’ll do:
+
+    Create a file called knowledge_base.py
+    Create a persistent ChromaDB client (data survives restarts)
+    Create a collection called "my_knowledge"
+    Add at least 15 documents covering content from at least 3 different modules you’ve completed. Each document should include:
+        A unique ID
+        The text content (a sentence or short paragraph summarizing a concept)
+        Metadata with at least: module (which module it’s from) and topic (general category like "api", "database", "frontend", "ai")
+    Implement a search function that:
+        Accepts a query string and an optional module filter
+        Returns the top 5 results with distances and metadata
+    Run at least 3 test queries:
+        One broad query (no filter)
+        One filtered to a specific module
+        One where the query uses completely different words than the stored documents
+
+Deliverable: A working knowledge_base.py that creates a persistent ChromaDB collection, adds 15+ documents with metadata, and demonstrates both unfiltered and filtered search.
+
+Hints:
+
+    Use client.get_or_create_collection() so the script works on repeated runs
+    Use collection.upsert() instead of collection.add() to handle re-runs without ID conflicts
+    The where parameter for filtering uses the format: where={"module": "5"}
+
+
+security-
+
+By the end of this lesson, you will be able to:
+
+    Explain what CORS is and configure it for your FastAPI application
+    Identify common API security threats and their mitigations
+    Implement basic rate limiting to prevent abuse
+    Describe how SQLAlchemy's ORM prevents SQL injection and why raw queries are risky
+
+You can build the most feature-rich API in the world, but if it's insecure, none of that matters. Security isn't something you bolt on at the end — it's something you build in from the start. This lesson covers the essential security practices every API developer needs to know.
+
+
+Think of API security like home security. A front door lock (authentication — you just built this) is necessary but not sufficient. You also need to think about who can approach your house (CORS), how many times someone can ring the doorbell before it's suspicious (rate limiting), and whether someone could slip a lockpick through the mail slot (injection attacks).
+CORS — Cross-Origin Resource Sharing
+
+When your Streamlit frontend (running on localhost:8501) tries to call your FastAPI backend (running on localhost:8000), the browser blocks it by default. This is a security feature called the Same-Origin Policy: browsers prevent JavaScript from making requests to a different origin (domain, port, or protocol) than the one that served the page.
+
+CORS tells the browser which origins are allowed to make requests to your API.
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "<http://localhost:8501>",       # Your Streamlit app
+        "<http://localhost:3000>",       # A React frontend (if you have one)
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+In development, you might allow all origins (allow_origins=["*"]). In production, always list specific origins.
+SQL Injection Prevention
+
+SQL injection is one of the most common and dangerous web vulnerabilities. An attacker inserts malicious SQL into your application's queries:
+# ❌ DANGEROUS — raw SQL with string formatting
+@app.get("/users")
+def search_users(name: str, db: Session = Depends(get_db)):
+    result = db.execute(f"SELECT * FROM users WHERE name = '{name}'")
+    return result.fetchall()
+
+An attacker could send name='; DROP TABLE users; -- and delete your entire database.
+
+The fix: never use string formatting for SQL. Use the ORM:
+# ✅ SAFE — SQLAlchemy ORM (what you've been doing all along)
+@app.get("/users")
+def search_users(name: str, db: Session = Depends(get_db)):
+    users = db.query(User).filter(User.name == name).all()
+    return users
+
+SQLAlchemy automatically parameterizes the query. The user's input is treated as data, never as SQL code.
+
+
+If you must use raw SQL (rare), always use parameterized queries:
+# ✅ SAFE — parameterized raw SQL
+from sqlalchemy import text
+result = db.execute(text("SELECT * FROM users WHERE name = :name"), {"name": name})
+
+Rate Limiting
+
+Rate limiting prevents abuse by restricting how many requests a client can make in a given time period. A simple approach using the slowapi library:
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
+
+@app.post("/auth/login")
+@limiter.limit("5/minute")
+def login(request: Request, credentials: LoginRequest, db: Session = Depends(get_db)):
+    # ... login logic
+
+
+Common rate limits: 
+
+    login endpoints at 5-10 per minute
+    general API endpoints at 60-100 per minute
+    AI/LLM endpoints at 5-10 per minute
+
+Input Validation as Security
+
+You've already been doing this with Pydantic, but let's explicitly frame it as a security practice:
+class CommentCreate(BaseModel):
+    content: str = Field(max_length=5000)  # Prevent absurdly large payloads
+    author_name: str = Field(max_length=100, pattern=r"^[a-zA-Z\\s]+$")  # Alphanumeric only
+
+
+max_length prevents clients from sending enormous payloads. pattern restricts input to expected characters. These aren't just data quality measures — they're security measures.
+Additional Security Practices
+
+    Never expose stack traces in production (your custom exception handler handles this)
+    Use HTTPS in production (handled at the deployment level)
+    Validate all inputs (Pydantic does this)
+    Hash passwords (you did this in the previous lesson)
+    Set token expiration (you did this too)
+
+ app/main.py
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(title="Secured API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8501",
+        "http://localhost:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["*"],
+)
+
+Step 2: Add rate limiting
+pip install slowapi
+
+# app/main.py (add to existing)
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# app/routers/auth.py (update login endpoint)
+from fastapi import Request
+from app.main import limiter
+
+@router.post("/login")
+@limiter.limit("5/minute")
+def login(request: Request, credentials: LoginRequest, db: Session = Depends(get_db)):
+    # ... existing login logic
+
+Step 3: Demonstrate SQL injection protection
+# For educational purposes — NEVER use unsafe patterns in production
+from sqlalchemy import text
+
+@router.get("/search-safe")
+def safe_search(name: str, db: Session = Depends(get_db)):
+    """ORM-based search — safe from SQL injection."""
+    users = db.query(User).filter(User.name.ilike(f"%{name}%")).all()
+    return users
+
+@router.get("/search-parameterized")
+def parameterized_search(name: str, db: Session = Depends(get_db)):
+    """Raw SQL with parameters — also safe."""
+    result = db.execute(
+        text("SELECT id, name, email FROM users WHERE name LIKE :pattern"),
+        {"pattern": f"%{name}%"}
+    )
+    return [dict(row._mapping) for row in result]
+
+padas data handling
+
+Learning Objectives
+
+By the end of this lesson, you will be able to:
+
+    Explain what pandas is and why it’s the standard tool for data handling in Python
+    Create and inspect DataFrames from CSV files and dictionaries
+    Select, filter, and sort data using pandas operations
+    Perform grouping and aggregation to summarize data
+
+So far in this module, you’ve built your own data structures and processed data with loops, comprehensions, and functions. That’s important foundational work. But in the real world of AI engineering and data processing, you’ll use a purpose-built tool: pandas.
+
+Pandas is Python’s standard library for data manipulation. If your data fits in a table (rows and columns), pandas is almost certainly the right tool.
+What Is a DataFrame?
+
+A DataFrame is pandas’ core data structure. Think of it as a spreadsheet in Python.
+import pandas as pd
+
+data = {
+    "name": ["Alice", "Bob", "Charlie", "Diana"],
+    "department": ["Engineering", "Marketing", "Engineering", "Sales"],
+    "salary": [95000, 72000, 110000, 68000],
+    "years": [5, 2, 8, 1],
+}
+
+df = pd.DataFrame(data)
+print(df)
+
+Output:
+      name   department  salary  years
+0    Alice  Engineering   95000      5
+1      Bob    Marketing   72000      2
+2  Charlie  Engineering  110000      8
+3    Diana        Sales   68000      1
+
+Loading Real Data
+df = pd.read_csv("employees.csv")
+
+# Quick inspection — always do this first
+print(df.shape)          # (rows, columns)
+print(df.dtypes)         # Column types
+print(df.head())         # First 5 rows
+print(df.describe())     # Statistical summary
+print(df.info())         # Column names, types, non-null counts
+
+These five commands are your first move on any new dataset.
+Selecting Data
+names = df["name"]                # Single column (Series)
+subset = df[["name", "salary"]]   # Multiple columns (DataFrame)
+first_three = df.iloc[0:3]        # Rows by position
+row = df.loc[0]                   # Rows by label/index
+
+Whole table → self.df.method()
+one column → self.df["column"].method()
+
+DataFrame
+    │
+    ▼
+self.df["salary"]
+    │
+    ▼
+Series
+    │
+    ├── .mean()
+    ├── .max()
+    ├── .min()
+    ├── .nunique()
+    ├── .value_counts()
+    └── ...
+one column → self.df["column"].method()
+
+PANDAS SERIES METHODS
+
+One column from a DataFrame becomes a Series:
+
+self.df["column"]
+
+Example:
+
+self.df["salary"]
+
+        ↓
+      Series
+
+A Series has methods:
+
+    .mean()          → average value
+    .max()           → largest value
+    .min()           → smallest value
+    .nunique()       → count unique values
+    .value_counts()  → count occurrences
+    .sum()           → total
+    .median()        → middle value
+    .isna()          → find missing values
+
+Pattern:
+
+one column → self.df["column"].method()
+
+Examples:
+
+self.df["salary"].mean()
+
+self.df["employee_id"].nunique()
+
+self.df["department"].value_counts()
+
+
+Filtering: The Power Move
+high_earners = df[df["salary"] > 80000]
+
+engineers = df[df["department"] == "Engineering"]
+
+# Combined conditions: use & (not 'and'), wrap each in parentheses
+senior_engineers = df[(df["department"] == "Engineering") & (df["salary"] >= 90000)]
+
+Sorting
+df_sorted = df.sort_values("salary", ascending=False)
+
+df_sorted = df.sort_values(["department", "salary"], ascending=[True, False])
+
+Grouping and Aggregation
+
+This is where pandas becomes essential:
+dept_avg = df.groupby("department")["salary"].mean()
+
+dept_summary = df.groupby("department").agg(
+    avg_salary=("salary", "mean"),
+    max_salary=("salary", "max"),
+    headcount=("name", "count"),
+    avg_years=("years", "mean"),
+)
+
+This kind of analysis would take 20+ lines of loop-based Python, done in one clear expression.
+Why Pandas for AI Engineering
+
+    Module 2 Project: Loading and cleaning messy CSV data
+    Module 3: Bridge lesson connecting DataFrame thinking to SQL thinking
+    Module 7: Preparing document collections for embedding
+    Production AI: Data preprocessing, feature engineering, evaluation metrics
+
+---------------------------------------------------------
+
+Analyzing a Real Dataset
+
+Let’s work through a realistic analysis with a sales dataset.
+import pandas as pd
+
+sales_data = {
+    "date": ["2025-01-05", "2025-01-05", "2025-01-06", "2025-01-06",
+             "2025-01-07", "2025-01-07", "2025-01-08", "2025-01-08",
+             "2025-01-09", "2025-01-09"],
+    "product": ["Widget A", "Widget B", "Widget A", "Widget C",
+                "Widget B", "Widget A", "Widget C", "Widget B",
+                "Widget A", "Widget C"],
+    "quantity": [3, 5, 2, 1, 7, 4, 3, 2, 6, 2],
+    "unit_price": [25.99, 15.50, 25.99, 42.00,
+                   15.50, 25.99, 42.00, 15.50,
+                   25.99, 42.00],
+    "region": ["North", "South", "East", "North",
+               "West", "South", "East", "North",
+               "West", "South"],
+}
+
+df = pd.DataFrame(sales_data)
+
+Step 1: Add a Calculated Column
+df["revenue"] = df["quantity"] * df["unit_price"]
+print(df.head())
+
+Step 2: Total Revenue by Product
+product_revenue = df.groupby("product")["revenue"].sum().sort_values(ascending=False)
+print(product_revenue)
+
+Step 3: Units Sold by Product
+units_by_product = df.groupby("product")["quantity"].sum().sort_values(ascending=False)
+print(units_by_product)
+
+Step 4: Revenue by Region
+region_revenue = df.groupby("region")["revenue"].sum().sort_values(ascending=False)
+print(region_revenue)
+
+Step 5: Daily Revenue Trend
+daily = df.groupby("date")["revenue"].sum()
+print(daily)
+
+Key Patterns to Remember
+
+    Add columns: df["new_col"] = expression
+    Filter rows: df[df["col"] > value]
+    Group + aggregate: df.groupby("col")["other_col"].sum()
+    Sort: .sort_values("col", ascending=False)
+    Chain operations: pandas methods return DataFrames, so you can chain them
+
+
+By the end of this lesson, you will be able to:
+
+    Open, read, and write text files using Python's built-in open() function
+    Use the with statement for safe file handling
+    Read and write CSV files using the built-in csv module
+    Explain why file I/O matters for data processing and persistence
+
+Every program you've written so far loses its data the moment it stops running. Variables exist in memory — when the program ends, the memory is reclaimed and the data vanishes.
+
+Files solve this problem. When you write data to a file, it persists on disk. When your program runs again, it can read that file back. This is the most basic form of data persistence, and it's the foundation for everything from saving user preferences to processing large datasets.
+ai-515ed121-7f0f-46d8-a6d1-09ecbfa5870d.png
+
+CSV
+ ↓
+load data
+ ↓
+clean data
+ ↓
+calculate data
+ ↓
+assign data
+ ↓
+build report dictionary
+ ↓
+write formatted report file
+Reading Files
+
+The open() function opens a file. Always use it inside a with block, which automatically closes the file when you're done:
+# Read the entire file as one string
+with open("notes.txt", "r") as file:
+    content = file.read()
+    print(content)
+
+# Read line by line
+with open("notes.txt", "r") as file:
+    for line in file:
+        print(line.strip())    # .strip() removes the trailing newline
+
+# Read all lines into a list
+with open("notes.txt", "r") as file:
+    lines = file.readlines()    # Each line is an element in the list
+
+The "r" stands for "read mode." This is the default, so open("notes.txt") works too, but being explicit is clearer.
+Writing Files
+# Write mode ("w") — creates file or OVERWRITES existing content
+with open("output.txt", "w") as file:
+    file.write("First line\\n")
+    file.write("Second line\\n")
+
+# Append mode ("a") — adds to the end without overwriting
+with open("output.txt", "a") as file:
+    file.write("Third line (appended)\\n")
+
+Critical warning: Write mode ("w") erases everything in the file before writing. If the file has important data and you use "w" instead of "a", that data is gone. There is no undo.
+Why with Matters
+
+The with statement ensures the file is properly closed even if an error occurs. Without it:
+# Risky — if an error occurs between open() and close(), the file stays open
+file = open("data.txt", "r")
+content = file.read()
+file.close()
+
+# Safe — the file is guaranteed to close
+with open("data.txt", "r") as file:
+    content = file.read()
+# File is automatically closed here
+
+Always use with. There is no good reason not to.
+
+
+Working with CSV Files-
+
+CSV (Comma-Separated Values) is the most common format for tabular data. Python's built-in csv module handles the parsing:
+import csv
+
+# Reading a CSV file
+with open("students.csv", "r") as file:
+    reader = csv.reader(file)
+    header = next(reader)    # Read the header row
+    
+    for row in reader:
+        name = row[0]
+        score = int(row[1])
+        print(f"{name}: {score}")
+
+csv.DictReader is even more convenient — it reads each row as a dictionary using the header as keys:
+import csv
+
+with open("students.csv", "r") as file:
+    reader = csv.DictReader(file)
+    for row in reader:
+        print(f"{row['name']}: {row['score']}")
+
+Writing CSV:
+import csv
+
+students = [
+    {"name": "Alice", "score": 95},
+    {"name": "Bob", "score": 82},
+    {"name": "Charlie", "score": 91}
+]
+
+with open("output.csv", "w", newline="") as file:
+    writer = csv.DictWriter(file, fieldnames=["name", "score"])
+    writer.writeheader()
+    writer.writerows(students)
+
+The newline="" parameter prevents double-spacing on Windows
+
+Faster Programing
+
+in Module 1, you learned what AI is and why it matters. Now we shift gears. For the rest of this course, you’re learning to build, and building well means writing code that doesn’t just work, but works efficiently.
+
+Here’s a scenario. You write a Python script that processes a list of 100 customer records. It runs in half a second. Great. Your boss says, “This works, let’s run it on our full database.” The full database has 10 million records. Your script now takes 14 hours. Same code, same logic, it just doesn’t scale.
+
+This is the problem Big O notation solves. It gives you a way to predict how your code will behave as the input gets larger, before you run it on 10 million records and wait all day.
+What Big O Actually Measures
+
+Big O notation describes the relationship between the size of the input and the number of operations your code performs. It doesn’t tell you the exact time in seconds, that depends on your computer’s speed, what else is running, and a dozen other factors. Instead, it tells you the growth rate. How does the work increase as the data increases?
+image-1f6d8a85-523c-4175-97bf-5d4a4e6841a1.png.jpeg
+
+Think of it like describing a road trip. You wouldn’t say “the trip takes exactly 3 hours and 42 minutes”, that depends on traffic, speed limits, and bathroom breaks. But you can say “the trip is proportional to the distance.” Drive twice as far, it takes roughly twice as long. That “proportional to distance” is the Big O of your road trip: O(distance).
+
+In code, “distance” becomes “the size of the input,” and we call it n.
+The Four Complexities You Need to Know
+
+There are many Big O classifications, but four cover the vast majority of code you’ll encounter:
+O(1) - Constant Time: “It doesn’t matter how big the input is.”
+
+The operation takes the same amount of time regardless of input size. Accessing an item in a list by index is O(1):
+my_list = [10, 20, 30, 40, 50]
+value = my_list[3]  # Always one operation, whether the list has 5 or 5 million items
+
+It doesn’t matter if the list has 5 elements or 5 million. Grabbing item #3 is one operation. Looking up a key in a dictionary is also O(1).
+O(n) - Linear Time: “Double the input, double the work.”
+
+The operation scales directly with the input size. Looping through a list is the classic example:
+def find_item(items, target):
+    for item in items:       # One pass through the list
+        if item == target:
+            return True
+    return False
+
+If the list has 100 items, you might check up to 100 items. If it has 10,000 items, you might check up to 10,000 items. The work grows linearly with the input.
+O(n²) - Quadratic Time: “Double the input, quadruple the work.”
+
+This usually happens with nested loops, a loop inside a loop:
+def find_duplicates(items):
+    duplicates = []
+    for i in range(len(items)):           # Outer loop: n times
+        for j in range(i + 1, len(items)):  # Inner loop: up to n times each
+            if items[i] == items[j]:
+                duplicates.append(items[i])
+    return duplicates
+
+For every item in the list, you’re comparing it against every other item. With 100 items, that’s roughly 100 × 100 = 10,000 comparisons. With 10,000 items, that’s 10,000 × 10,000 = 100,000,000 comparisons. This is where code starts to feel slow.
+O(log n) - Logarithmic Time: “Double the input, add one step.”
+
+This is the efficiency sweet spot. Binary search is the classic example, you cut the search space in half with each step:
+def binary_search(sorted_list, target):
+    low, high = 0, len(sorted_list) - 1
+    while low <= high:
+        mid = (low + high) // 2
+        if sorted_list[mid] == target:
+            return mid
+        elif sorted_list[mid] < target:
+            low = mid + 1       # Ignore the left half
+        else:
+            high = mid - 1      # Ignore the right half
+    return -1
+
+A sorted list of 1,000 items? Binary search finds any item in at most 10 steps. A sorted list of 1,000,000 items? At most 20 steps. That’s the power of logarithmic growth, doubling the input only adds one more step.
+Why This Matters for AI Engineering
+
+You might be thinking: “I’m here to learn AI, not algorithms.” Here’s why this matters for you specifically:
+
+When you build AI applications (Modules 7-8), you’ll work with thousands or millions of documents stored in vector databases. The difference between O(n) search (check every document) and O(log n) search (use an index) is the difference between a chatbot that responds in 50 milliseconds and one that takes 30 seconds. Your users won’t wait.
+
+When you process data with pandas (later this module), understanding why some operations are fast (vectorized operations — essentially O(n)) and some are slow (row-by-row loops — often O(n²)) will save you hours of debugging slow pipelines.
+
+Big O isn’t abstract theory. It’s the reason your code will or won’t work in production.
+..
+
+image-29d9b2ed-8a37-4745-adf0-005b3692e993.png
+
+
+______________________________________________________________
+
+approach 1: Nested Loops - O(n²)
+def has_duplicate_nested(data):
+    """Compare every element to every other element."""
+    for i in range(len(data)):
+        for j in range(i + 1, len(data)):
+            if data[i] == data[j]:
+                return True
+    return False
+
+This checks every possible pair. For a list of 1,000 items, that’s up to ~500,000 comparisons. For 10,000 items, it’s up to ~50,000,000.
+Approach 2: Sort First - O(n log n)
+def has_duplicate_sort(data):
+    """Sort the list, then check adjacent elements."""
+    sorted_data = sorted(data)          # O(n log n) — Python's sort
+    for i in range(len(sorted_data) - 1):
+        if sorted_data[i] == sorted_data[i + 1]:  # O(n) — one pass
+            return True
+    return False
+
+Sorting is O(n log n), and then one linear scan is O(n). Total: O(n log n). Much better than O(n²).
+Approach 3: Use a Set - O(n)
+def has_duplicate_set(data):
+    """Add elements to a set; if we try to add one that's already there, it's a duplicate."""
+    seen = set()
+    for item in data:           # One pass through the data: O(n)
+        if item in seen:        # Set lookup: O(1)
+            return True
+        seen.add(item)          # Set insertion: O(1)
+    return False
+
+One loop, and each set operation is O(1). Total: O(n).
+Let’s Time Them
+import time
+import random
+
+def benchmark(func, data):
+    """Time how long a function takes to run."""
+    start = time.time()
+    result = func(data)
+    end = time.time()
+    return end - start
+
+# Generate test data with no duplicates (worst case — must check everything)
+sizes = [1000, 5000, 10000, 20000]
+
+for size in sizes:
+    data = list(range(size))        # No duplicates — forces full scan
+    random.shuffle(data)            # Randomize order
+
+    t1 = benchmark(has_duplicate_nested, data)
+    t2 = benchmark(has_duplicate_sort, data)
+    t3 = benchmark(has_duplicate_set, data)
+
+    print(f"n={size:>6}  |  Nested: {t1:.4f}s  |  Sort: {t2:.4f}s  |  Set: {t3:.4f}s")
+
+Expected Output (approximate - your times will vary)
+n=  1000  |  Nested: 0.0320s  |  Sort: 0.0003s  |  Set: 0.0001s
+n=  5000  |  Nested: 0.8100s  |  Sort: 0.0015s  |  Set: 0.0006s
+n= 10000  |  Nested: 3.2400s  |  Sort: 0.0032s  |  Set: 0.0012s
+n= 20000  |  Nested: 12.960s  |  Sort: 0.0070s  |  Set: 0.0025s
+
+Notice the pattern:
+
+    Nested (O(n²)): When n doubles from 10,000 to 20,000, the time roughly quadruples. This is the signature of quadratic growth.
+    Sort (O(n log n)): When n doubles, the time slightly more than doubles. Fast enough for most purposes.
+    Set (O(n)): When n doubles, the time roughly doubles. The fastest approach.
+
+The takeaway: All three functions produce the correct answer. The difference is entirely in how they scale. At n=1,000, you might not notice. At n=20,000, the nested approach is 5,000x slower than the set approach. At n=1,000,000 (common in real data), the nested approach would take hours while the set approach takes milliseconds.
+Quick Reference: Spotting Big O in Code
+
+Pattern
+	
+
+Typical Big O
+	
+
+Example
+
+Dictionary/set lookup
+O(1)
+if key in my_dict:
+Single loop through data
+	
+
+O(n)
+for item in data:
+Loop with halving
+	
+
+O(log n)
+Binary search, 
+while low <= high: mid = ...
+Nested loops (both over data)
+	
+
+O(n²)
+for i in data: for j in data:
+Sorting
+	
+
+O(n log n)
+sorted(data)
+sort()
+
+O(1)		Constant	Same amount of work every time
+O(log n)	Logarithmic	Grows very slowly
+O(n)		Linear		Grows proportionally with the input
+O(n log n)	Linearithmic	Slightly more than linear
+O(n²)		Quadratic	Grows much faster
+O(2ⁿ)		Exponential	Explodes as input grows
+Think of it like this:
+
+🟢 O(1): Excellent
+🟢 O(log n): Excellent
+🟢 O(n): Good and very common
+🟡 O(n log n): Good for tasks like efficient sorting
+🟠 O(n²): Can become slow on large inputs
+🔴 O(2ⁿ) and O(n!): Usually impractical except for very small
+You use the web every single day. You type something into a browser, hit Enter, and a page appears. It feels instant and almost magical - like flipping a light switch.
+
+But here's the thing: when you flip a light switch, a remarkable chain of events happens behind the wall. Electricity flows from a power plant through miles of wire, gets stepped down by transformers, routes through your home's circuit breaker, and finally reaches that one bulb. You don't need to understand all of that to turn on a light. But if you're training to become an electrician, you absolutely do.
+
+That's where you are right now. You're not just using the web anymore - you're about to build things on it. In Module 5, you built a FastAPI backend. In this module, you'll build the other half: the part users actually see and interact with. To do that well, you need to understand how the web actually works under the hood.
+
+Let's trace exactly what happens when you type https://www.google.com into your browser and press Enter.
+Step 1: Your Browser Looks Up the Address (DNS)
+
+Your browser doesn't actually know where "google.com" lives. Domain names like "google.com" are for humans - computers communicate using IP addresses, which are numerical identifiers like 142.250.80.46.
+
+So the very first thing your browser does is ask: "What's the IP address for google.com?" It sends this question to a DNS server (Domain Name System). Think of DNS as the internet's phone book - you give it a name, it gives you a number.
+
+
+image (7).png
+
+
+Your computer usually knows which DNS server to ask because your internet provider (or your Wi-Fi router) configured it automatically. The DNS server looks up the name and responds with the IP address. This usually takes milliseconds.
+Step 2: Your Browser Connects and Sends a Request (HTTP)
+
+Now that your browser knows the IP address, it connects to that server and sends an HTTP request. You already know about HTTP from Module 4 - it's the protocol (the set of rules) that browsers and servers use to communicate.
+
+The request includes several pieces of information: the method (GET - because you want to get a page), the path (/ - the root page), headers (metadata like what browser you're using, what language you prefer, and whether you accept compressed data), and sometimes a body (not for GET requests, but for POST requests when you're sending data).
+
+This is the exact same structure you worked with when building API endpoints in FastAPI. The web isn't using some different system for websites versus APIs - it's all HTTP, all the way down.
+Step 3: The Server Responds
+
+Google's server receives your request, processes it (figures out what page to show you), and sends back an HTTP response. This response contains a status code (200 OK - success), headers (content type, cache rules, security settings), and a body (the actual HTML, CSS, and JavaScript that make up the page).
+
+You remember status codes from Module 4:
+
+    200 - Everything worked
+    301 - This page moved permanently (the server tells your browser the new address)
+    404 - Not found (the thing you asked for doesn't exist)
+    500 - Server error (something broke on their end)
+
+These codes aren't just API concepts. Every single webpage you've ever loaded returned one of these codes. Your browser just handles them silently - redirecting on 301s, showing error pages on 404s.
+Step 4: Your Browser Renders the Page
+
+The response body contains three types of content: HTML (the structure - headings, paragraphs, images, links), CSS (the styling - colors, fonts, spacing, layout), and JavaScript (the behavior - what happens when you click a button, type in a search box, or scroll down).
+
+Your browser reads the HTML first to build the structure, applies the CSS to make it look right, then runs the JavaScript to make it interactive. This entire process - from DNS lookup to rendered page - typically takes under a second.
+
+
+image (8).png
+HTTPS: The Secure Version
+
+You probably noticed the "https://" at the start of the URL. The "s" stands for secure. HTTPS encrypts the communication between your browser and the server so that nobody in between (your Wi-Fi provider, a hacker on the same coffee shop network, your ISP) can read the data being exchanged.
+
+For AI applications that handle user data, API keys, or any sensitive information, HTTPS is not optional - it's essential. Every modern browser warns users when a site uses plain HTTP instead of HTTPS.
+Why This Matters for AI Engineers
+
+You might be wondering: "I'm building AI applications, not websites. Why do I need to know this?"
+
+Because every AI application has a user interface, and that interface communicates with your backend over HTTP. When you build a Streamlit app in Week 2 that connects to your FastAPI backend, here's what's actually happening: your user's browser loads the Streamlit interface, the interface sends HTTP requests to your FastAPI server, your server processes the request (maybe queries a database, maybe calls an AI model), and the response flows back to the browser to display the result.
+
+Understanding this cycle means you can debug problems. When something doesn't work, you'll know how to check: Is it a DNS issue? A connection problem? A wrong status code? A malformed response? The DevTools Network tab - which you'll use in the Guided Example — makes all of this visible.
+
+You're not just a user of the web anymore. You're a builder. And builders understand their medium.
+
+
+Last week you learned HTML, CSS, and JavaScript. You built pages, styled them, made them interactive, and connected them to an API. It worked - but it took a lot of code across multiple files in three different languages.
+
+Now imagine you could do all of that in one Python file. No HTML. No CSS. No JavaScript. Just Python.
+
+That’s Streamlit.
+
+Streamlit is a Python library that turns Python scripts into interactive web applications. You write Python, and Streamlit converts it into a fully functional web app with widgets, charts, tables, and layouts - all rendered in the browser.
+The Same App, Two Ways
+
+Let’s compare building a simple "Hello World" app:
+
+HTML/CSS/JS version (3 files, ~40 lines):
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hello App</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>Hello!</h1>
+    <input type="text" id="name-input" placeholder="Enter your name">
+    <p id="greeting"></p>
+    <script>
+        document.querySelector("#name-input").addEventListener("input", (e) => {
+            document.querySelector("#greeting").textContent = 
+                e.target.value ? `Hello, ${e.target.value}!` : "";
+        });
+    </script>
+</body>
+</html>
+
+Streamlit version (1 file, 4 lines):
+import streamlit as st
+
+st.title("Hello!")
+name = st.text_input("Enter your name")
+if name:
+    st.write(f"Hello, {name}!")
+
+Four lines. One language. No event listeners, no DOM manipulation, no separate CSS file. Streamlit handles all the web rendering for you.
+The Re-Run Model (THE Most Important Concept)
+
+Here’s the one thing you absolutely must understand about Streamlit, because everything else builds on it:
+
+Every time a user interacts with any widget, the entire Python script re-runs from top to bottom.
+
+Read that again. It’s not like Flask or FastAPI where specific functions handle specific requests. In Streamlit, the whole script runs again. Every time.
+
+    User types in a text box? Script re-runs.
+    User clicks a button? Script re-runs.
+    User moves a slider? Script re-runs.
+
+This is radically different from how JavaScript works. In JavaScript, you set up event listeners that run specific functions when specific things happen. In Streamlit, there are no event listeners - the entire script IS the event handler.
+
+This design makes Streamlit incredibly simple to write. But it has one critical consequence:
+
+All variables reset to their initial values on every re-run.
+
+This means code like this does NOT work as a counter:
+count = 0  # Resets to 0 every time the script re-runs!
+if st.button("Increment"):
+    count += 1
+st.write(f"Count: {count}")  # Always shows 0 or 1, never 2+
+
+The solution is st.session_state - a dictionary that persists across re-runs. You’ll learn this in the State Management lesson.
+Installation and Running
+
+Install Streamlit in your module’s virtual environment:
+pip install streamlit
+
+Create a file called app.py and add some code, then run it:
+streamlit run app.py
+
+Streamlit starts a local web server and opens your browser to http://localhost:8501. Every time you save the file, Streamlit detects the change and offers to re-run the app.
+Why Streamlit for AI Interfaces?
+
+Streamlit was designed for data and AI applications. It has built-in support for displaying DataFrames and tables with sorting and filtering, rendering charts with one line of code, streaming text (critical for AI chat interfaces), managing file uploads, caching expensive computations (like model loading or API calls), and chat interface components (st.chat_message, st.chat_input).
+
+For the rest of this course - building semantic search tools (Module 7), RAG chatbots (Module 8), and your capstone project (Module 9) — Streamlit will be your frontend. The web literacy from Week 1 helps you understand what Streamlit is doing under the hood. But from here forward, you stay in Python.
+Widget Basics: Every Widget Returns a Value
+
+Streamlit widgets aren’t just visual elements - they’re functions that return the current value of the widget:
+name = st.text_input("Your name")     # Returns "" until the user types
+age = st.slider("Age", 18, 100, 25)   # Returns the current slider value (default 25)
+agreed = st.checkbox("I agree")        # Returns True or False
+color = st.selectbox("Color", ["Red", "Blue", "Green"])  # Returns the selected option
+
+Because the script re-runs on every interaction, these widgets always return their current value. You can use those values immediately in conditions, calculations, or API calls - no event listeners needed.
+
+This is the power of Streamlit’s model: describe what you want to display, and Streamlit handles the interactivity.
+
+n the last lesson, you learned that Streamlit renders content top-to-bottom - each st.write() or widget appears below the previous one. That works for simple apps, but real dashboards need structure: controls on the side, metrics across the top, content organized into sections.
+
+Think of it like organizing a physical workspace. You could pile everything on one long table. But a well-organized workspace has drawers for tools (sidebar), a quick-reference board at eye level (metrics), and labeled folders for different projects (tabs). Same content, dramatically better experience.
+
+Streamlit has built-in layout components that give you this structure with minimal code.
+Page Configuration
+
+Before any content, set the page configuration:
+st.set_page_config(
+    page_title="My Dashboard",      # Browser tab title
+    page_icon="📊",                 # Browser tab icon
+    layout="wide",                  # Use full browser width (default is "centered")
+    initial_sidebar_state="expanded" # Sidebar starts open
+)
+
+This must be the first Streamlit command in your script (after imports). If you call it after any other st. function, you’ll get an error.
+Columns: Side-by-Side Content
+
+st.columns() creates horizontal columns. Each column is an independent container:
+# Equal-width columns
+col1, col2, col3 = st.columns(3)  # 3 equal columns
+
+with col1:
+    st.metric("Users", "1,234", "+12%")
+with col2:
+    st.metric("Revenue", "$45,678", "+8%")
+with col3:
+    st.metric("Tasks", "89", "-3")
+
+You can also create unequal columns by passing a list of ratios:
+left, right = st.columns([2, 1])  # Left is 2x wider than right
+
+The st.metric() component is built for dashboard KPIs - it shows a label, a value, and an optional delta (change indicator) with automatic green/red coloring.
+Sidebar: Controls on the Side
+
+The sidebar is perfect for filters, settings, and navigation. Use the st.sidebar prefix:
+# Sidebar content
+st.sidebar.title("Controls")
+date_range = st.sidebar.selectbox("Time Period", ["Today", "This Week", "This Month"])
+show_chart = st.sidebar.checkbox("Show chart", value=True)
+
+Or use the with syntax:
+with st.sidebar:
+    st.title("Controls")
+    category = st.selectbox("Category", ["All", "Sales", "Marketing"])
+
+Best practice: put controls (filters, inputs, settings) in the sidebar, and content (charts, tables, data) in the main area. This matches the pattern users expect from dashboards.
+Tabs: Organized Sections
+
+Tabs let users switch between different views without scrolling:
+tab1, tab2, tab3 = st.tabs(["Overview", "Details", "Raw Data"])
+
+with tab1:
+    st.write("High-level summary goes here")
+with tab2:
+    st.write("Detailed breakdown goes here")
+with tab3:
+    st.write("Raw data table goes here")
+
+Only one tab is visible at a time. Switching tabs triggers a re-run (like everything else in Streamlit).
+Expanders: Show/Hide Content
+
+Expanders collapse content behind a clickable header:
+with st.expander("Advanced Settings"):
+    threshold = st.slider("Threshold", 0.0, 1.0, 0.5)
+    st.write("These settings are hidden by default to keep the UI clean.")
+
+Expanders are great for optional information, detailed explanations, or settings that most users don’t need to see.
+Containers
+
+st.container() creates a logical grouping that you can write to out of order:
+placeholder = st.container()
+
+# This runs later but appears ABOVE the content below
+placeholder.write("This appears at the top!")
+
+st.write("This appears at the bottom")
+
+Containers are useful when you want to reserve a spot in the layout and fill it later (e.g., showing a result above the form that generated it).
+Layout Best Practices
+
+Here’s the standard dashboard pattern you’ll use for the module project and beyond:
+┌───────────────┬───────────────────────────────────────┐
+│  SIDEBAR      │  METRICS ROW (st.columns + st.metric) │
+│               ├───────────────────────────────────────┤
+│  Filters      │  TABS (Overview | Details | Raw Data) │
+│  Controls     │                                       │
+│  Settings     │  Main content area                    │
+│               │  (charts, tables, forms)              │
+└───────────────┴───────────────────────────────────────┘
+
+
+image (10).png
+
+
+Let’s build a complete dashboard layout. Create layout_demo.py:
+import streamlit as st
+import random
+
+# --- Page Config (MUST be first Streamlit command) ---
+st.set_page_config(
+    page_title="Dashboard Demo",
+    page_icon="📊",
+    layout="wide"  # Use full browser width
+)
+
+# --- Sidebar: Controls ---
+with st.sidebar:
+    st.title("⚙️ Controls")
+
+    time_period = st.selectbox(
+        "Time Period",
+        ["Today", "This Week", "This Month", "This Year"]
+    )
+
+    department = st.radio(
+        "Department",
+        ["All", "Engineering", "Marketing", "Sales"]
+    )
+
+    show_details = st.checkbox("Show detailed view", value=True)
+
+    st.divider()
+    st.caption(f"Viewing: {department} | {time_period}")
+
+# --- Main Content ---
+st.title("📊 Team Dashboard")
+st.write(f"Showing data for **{department}** department — **{time_period}**")
+
+# --- Metrics Row (4 columns) ---
+col1, col2, col3, col4 = st.columns(4)
+
+# Simulate different data based on sidebar selections
+multiplier = {"Today": 1, "This Week": 7, "This Month": 30, "This Year": 365}
+base = multiplier.get(time_period, 1)
+
+with col1:
+    st.metric("Total Tasks", f"{42 * base:,}", f"+{base}")
+with col2:
+    st.metric("Completed", f"{35 * base:,}", f"+{base - 1}")
+with col3:
+    st.metric("In Progress", f"{5 * base:,}", f"-{max(1, base//10)}")
+with col4:
+    completion = round(35 / 42 * 100, 1)
+    st.metric("Completion Rate", f"{completion}%", "+2.3%")
+
+st.divider()
+
+# --- Tabbed Content ---
+tab_overview, tab_details, tab_raw = st.tabs(
+    ["📈 Overview", "🔍 Details", "🗑️ Raw Data"]
+)
+
+with tab_overview:
+    st.subheader("Task Completion Trend")
+    # Generate sample chart data
+    chart_data = {"Day": list(range(1, 8)), "Tasks": [random.randint(3, 12) for _ in range(7)]}
+    st.bar_chart(chart_data, x="Day", y="Tasks")
+
+    with st.expander("💡 How to read this chart"):
+        st.write("Each bar represents the number of tasks completed on that day. "
+                 "Higher bars indicate more productive days. Look for patterns — "
+                 "are certain days consistently more productive?")
+
+with tab_details:
+    if show_details:  # Controlled by sidebar checkbox
+        st.subheader("Team Members")
+
+        # Display team members in a 2-column layout
+        left, right = st.columns(2)
+
+        with left:
+            st.write("**Engineering**")
+            st.write("- Alice: 12 tasks completed")
+            st.write("- Bob: 8 tasks completed")
+            st.write("- Charlie: 15 tasks completed")
+
+        with right:
+            st.write("**Marketing**")
+            st.write("- Diana: 10 tasks completed")
+            st.write("- Eve: 7 tasks completed")
+    else:
+        st.info("Enable 'Show detailed view' in the sidebar to see team details.")
+
+with tab_raw:
+    st.subheader("Raw Task Data")
+    # Sample data as a list of dictionaries
+    sample_data = [
+        {"Task": "Build API", "Assignee": "Alice", "Status": "Done", "Priority": "High"},
+        {"Task": "Write tests", "Assignee": "Bob", "Status": "In Progress", "Priority": "Medium"},
+        {"Task": "Update docs", "Assignee": "Charlie", "Status": "Done", "Priority": "Low"},
+        {"Task": "Deploy v2", "Assignee": "Alice", "Status": "Pending", "Priority": "High"},
+        {"Task": "Design mockups", "Assignee": "Diana", "Status": "Done", "Priority": "Medium"},
+    ]
+    st.dataframe(sample_data, use_container_width=True)  # Interactive table
+
+Run it:
+streamlit run layout_demo.py
+What You Should See
+
+A full-width dashboard with: a sidebar containing a selectbox, radio buttons, and a checkbox; a metrics row with 4 cards across the top; three tabs (Overview with a bar chart and expander, Details with a two-column team layout controlled by the sidebar checkbox, and Raw Data with an interactive table).
+
+Change the sidebar controls - the metrics update, the details tab responds to the checkbox, and the time period label updates throughout.
+
+
+Here’s the scenario that confuses every new Streamlit developer. You write this code, expecting a counter that goes up each time you click:
+import streamlit as st
+
+count = 0
+if st.button("Add one"):
+    count += 1
+st.write(f"Count: {count}")
+
+You click the button. The count shows 1. You click again. The count… still shows 1. Or sometimes 0. It never reaches 2.
+
+Why? Because of the re-run model. Every time you click the button, the entire script re-runs from the top. Line 3 (count = 0) executes again, resetting your counter to zero before the button logic can increment it.
+
+This isn’t a bug. It’s the fundamental consequence of Streamlit’s design. And the solution is st.session_state.
+image (5).png
+st.session_state: Memory That Survives Re-Runs
+
+st.session_state is a dictionary that persists across re-runs. It’s like a notebook that Streamlit keeps next to your script - the script can read from it and write to it, and the values stay even when the script re-runs.
+
+Here’s the counter, fixed:
+import streamlit as st
+
+# Initialize ONCE — only runs when the key doesn't exist yet
+if "count" not in st.session_state:
+    st.session_state["count"] = 0
+
+if st.button("Add one"):
+    st.session_state["count"] += 1   # Modify the persistent value
+
+st.write(f"Count: {st.session_state['count']}")
+
+Now click the button multiple times. The count goes 1, 2, 3, 4… correctly. The initialization check (if "count" not in st.session_state) ensures we only set the initial value once, on the very first run. Every subsequent re-run skips that line because the key already exists.
+
+This initialization pattern is the most important pattern in Streamlit:
+if "key" not in st.session_state:
+    st.session_state["key"] = initial_value
+
+You’ll use it for everything: login tokens, form data, chat history, quiz scores, navigation state.
+st.form(): Batching Inputs to Prevent Re-Run Overload
+
+Imagine a form with 5 fields. Without st.form(), every time the user changes ANY field, the script re-runs. Filling out 5 fields triggers 5+ re-runs before they even submit.
+
+If each re-run triggers an API call, that’s 5 unnecessary API calls. For expensive operations (AI model calls, database queries), this is wasteful or even rate-limit-triggering.
+
+st.form() solves this by batching inputs:
+with st.form("task_form", clear_on_submit=True):
+    title = st.text_input("Task title")
+    priority = st.selectbox("Priority", ["Low", "Medium", "High"])
+    description = st.text_area("Description")
+
+    submitted = st.form_submit_button("Add Task")
+
+    if submitted:
+        # This only runs when the submit button is clicked
+        st.session_state["tasks"].append({
+            "title": title,
+            "priority": priority,
+            "description": description
+        })
+
+Inside a form, widget interactions do NOT trigger re-runs. Only the submit button does. The clear_on_submit=True option resets all fields after submission - perfect for "add item" forms.
+Key Input Widgets Reference
+
+Streamlit has widgets for every common input type:
+
+Text: st.text_input(), st.text_area(), st.number_input()
+
+Selection: st.selectbox(), st.multiselect(), st.radio(), st.checkbox()
+
+Range: st.slider(), st.select_slider()
+
+Date/Time: st.date_input(), st.time_input()
+
+Files: st.file_uploader()
+
+Actions: st.button(), st.form_submit_button()
+
+Every widget returns its current value. Inside a form, values are captured when submitted.
+Building Multi-Step Flows
+
+Session state enables multi-step experiences. Here’s the pattern for a quiz-style flow:
+if "step" not in st.session_state:
+    st.session_state["step"] = 1
+
+if st.session_state["step"] == 1:
+    st.write("Step 1: Enter your name")
+    name = st.text_input("Name")
+    if st.button("Next") and name:
+        st.session_state["name"] = name
+        st.session_state["step"] = 2
+        st.rerun()  # Force an immediate re-run to show step 2
+
+elif st.session_state["step"] == 2:
+    st.write(f"Welcome, {st.session_state['name']}!")
+    st.write("Step 2: Choose your settings")
+    # ... more content ...
+
+st.rerun() forces an immediate re-run, which is useful when you change state and want the UI to reflect it without waiting for the user to interact with something.
+Common Pitfalls
+
+Pitfall 1: Forgetting initialization. If you read st.session_state["count"] before it exists, you’ll get a KeyError. Always initialize first.
+
+Pitfall 2: Using st.button() for persistent actions. st.button() returns True only during the re-run when it’s clicked. On the next re-run, it’s False again. So code inside if st.button(...) only runs for one run. For persistent changes, store the result in session state.
+
+Pitfall 3: Duplicate widget keys. If you create two widgets with the same label inside a loop, Streamlit can’t tell them apart. Use the key parameter to give each a unique identifier: st.button("Delete", key=f"delete_{item_id}")
+
+et’s build a notes app that demonstrates all the state management patterns you’ll need. Create notes_app.py:
+import streamlit as st
+from datetime import datetime
+
+st.set_page_config(page_title="Notes App", page_icon="📝", layout="wide")
+
+# --- Initialize Session State ---
+if "notes" not in st.session_state:
+    st.session_state["notes"] = [
+        {"text": "Welcome to the Notes App!", "tag": "General",
+         "time": datetime.now().strftime("%H:%M")}
+    ]
+
+# --- Sidebar: Tag Filter ---
+with st.sidebar:
+    st.title("🏷️ Filter by Tag")
+
+    # Get unique tags from all notes
+    all_tags = list(set(note["tag"] for note in st.session_state["notes"]))
+    all_tags.sort()
+
+    selected_tag = st.radio(
+        "Show notes tagged:",
+        ["All"] + all_tags
+    )
+
+    st.divider()
+    st.metric("Total Notes", len(st.session_state["notes"]))
+
+# --- Main Content ---
+st.title("📝 Notes App")
+
+# --- Add Note Form ---
+with st.form("add_note", clear_on_submit=True):  # Clears fields after submit
+    st.subheader("Add a New Note")
+
+    note_text = st.text_area("Note", placeholder="Write your note here...")
+    note_tag = st.selectbox("Tag", ["General", "Work", "Personal", "Ideas", "Todo"])
+
+    submitted = st.form_submit_button("➕ Add Note")
+
+    if submitted and note_text.strip():  # Only add if there's actual text
+        st.session_state["notes"].append({
+            "text": note_text.strip(),
+            "tag": note_tag,
+            "time": datetime.now().strftime("%H:%M")
+        })
+        st.rerun()  # Force re-run to show the new note immediately
+
+st.divider()
+
+# --- Display Notes ---
+# Filter notes based on sidebar selection
+if selected_tag == "All":
+    filtered = st.session_state["notes"]
+else:
+    filtered = [n for n in st.session_state["notes"] if n["tag"] == selected_tag]
+
+st.subheader(f"Notes ({len(filtered)} showing)")
+
+if not filtered:
+    st.info("No notes found for this tag. Try 'All' or add a new note!")
+
+# Display each note with a delete button
+for i, note in enumerate(filtered):
+    col_text, col_delete = st.columns([5, 1])  # 5:1 ratio
+
+    with col_text:
+        st.write(f"**[{note['tag']}]** {note['text']}")
+        st.caption(f"Added at {note['time']}")
+
+    with col_delete:
+        # CRITICAL: unique key for each delete button
+        if st.button("🗑️", key=f"delete_{i}_{note['time']}"):
+            st.session_state["notes"].remove(note)
+            st.rerun()  # Re-run to update the display
+
+    st.divider()
+
+Run it:
+streamlit run notes_app.py
+
+What You Should See
+
+    A form to add notes with a text area, tag selector, and submit button
+    The form clears after submission (clear_on_submit=True)
+    Notes appear below with their tag and timestamp
+    The sidebar lets you filter notes by tag
+    Each note has a delete button that removes it
+
+Key Patterns in This Example
+
+Initialization: if "notes" not in st.session_state - the standard pattern.
+
+Form batching: The text area and selectbox inside st.form() don’t trigger re-runs until you click "Add Note."
+
+Unique keys: key=f"delete_{i}_{note['time']}" ensures each delete button is uniquely identified. Without unique keys, Streamlit would confuse which button was clicked.
+
+st.rerun(): After adding or deleting a note, we force a re-run so the display updates immediately.
+
+Filtered display: The sidebar filter uses a simple list comprehension on the session state data. The data lives in session state; the display is rebuilt from it on every run.
+
+Module 6 - Web Essentials & Streamlit
+
+Estimated time: 30 minutes
+Learning Objectives
+
+By the end of this lesson, you will be able to:
+
+    Choose between st.dataframe() and st.table() for displaying tabular data
+    Create line, bar, and area charts with Streamlit’s built-in charting and Plotly
+    Use st.metric() with delta values and delta_color for KPI dashboards
+    Apply @st.cache_data to avoid re-fetching data on every script re-run
+
+You’ve learned how to lay out a page and manage state. Now let’s fill it with data. Streamlit was built for data-heavy applications, and it shows - displaying tables, charts, and metrics takes remarkably little code.
+image (11).png
+
+
+Think of this lesson as stocking the shelves of your dashboard. The layout is the store (from Lesson 8). Now you’re putting products on display in the most effective way.
+Tables: st.dataframe() vs st.table()
+
+Streamlit has two ways to display tabular data:
+
+st.dataframe() renders an interactive table. Users can sort columns, resize them, search, and scroll. It handles large datasets efficiently.
+
+st.table() renders a static table. No sorting, no interactivity. Good for small, fixed data that doesn’t need interaction.
+import pandas as pd
+
+df = pd.DataFrame({"Name": ["Alice", "Bob", "Charlie"], "Score": [92, 85, 78]})
+
+st.dataframe(df, use_container_width=True)  # Interactive — sortable, scrollable
+st.table(df)                                 # Static — simple display
+
+Rule of thumb: use st.dataframe() for most cases. Use st.table() only when you want a simple, non-interactive display.
+Charts: Built-In and Plotly
+
+Streamlit has simple built-in charts for quick visualization:
+st.line_chart(df, x="Day", y="Sales")     # Line chart
+st.bar_chart(df, x="Category", y="Count")  # Bar chart
+st.area_chart(df, x="Month", y="Revenue")  # Area chart
+
+These are great for quick, simple visualizations. For more control (custom colors, multiple axes, scatter plots, annotations), use Plotly:
+import plotly.express as px
+
+fig = px.scatter(df, x="price", y="rating", color="category",
+                 title="Price vs Rating")
+st.plotly_chart(fig, use_container_width=True)
+
+Plotly charts are interactive by default — users can hover for details, zoom, and pan.
+Metrics: KPI Dashboard Cards
+
+st.metric() displays a label, value, and delta (change indicator):
+st.metric("Revenue", "$45,678", "+12%")          # Green delta (positive is good)
+st.metric("Bugs", "23", "-5", delta_color="inverse") # Green delta because FEWER bugs is good
+st.metric("Users", "1,234", "0")                  # Gray delta (no change)
+
+The delta_color="inverse" parameter flips the color logic — negative deltas show green and positive show red. Use this for metrics where decreasing is good (bugs, costs, response times).
+Caching: Don’t Re-Fetch on Every Re-Run
+
+Remember: every widget interaction triggers a re-run. If your script fetches data from an API or database, that fetch happens on every single re-run. For a function that takes 3 seconds, every button click means a 3-second wait.
+
+@st.cache_data solves this:
+@st.cache_data(ttl=300)  # Cache for 300 seconds (5 minutes)
+def fetch_users():
+    response = requests.get("<https://jsonplaceholder.typicode.com/users>")
+    return response.json()
+
+users = fetch_users()  # First call: fetches from API. Subsequent calls: uses cache.
+
+The first time fetch_users() is called, it runs normally and caches the result. On subsequent re-runs (within the TTL), Streamlit returns the cached result instantly without calling the function again.
+
+ttl (time to live) controls how long the cache stays valid. After 300 seconds, the next call fetches fresh data.
+Other Useful Display Elements
+st.code("print('hello')", language="python")  # Syntax-highlighted code block
+st.json({"name": "Alice", "age": 30})          # Formatted JSON display
+
+st.info("Informational message")               # Blue info box
+st.success("Operation completed!")             # Green success box
+st.warning("Proceed with caution")             # Yellow warning box
+st.error("Something went wrong")               # Red error box
+
+These status elements are essential for user feedback - confirming actions, showing warnings, and displaying 
+
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import random
+
+st.set_page_config(page_title="Data Display Demo", page_icon="📊", layout="wide")
+
+# --- Generate sample data ---
+@st.cache_data  # Cache so it doesn't regenerate on every re-run
+def load_data():
+    categories = ["Electronics", "Clothing", "Food", "Books", "Home"]
+    data = []
+    for i in range(50):
+        data.append({
+            "Product": f"Product {i+1}",
+            "Category": random.choice(categories),
+            "Price": round(random.uniform(5, 200), 2),
+            "Rating": round(random.uniform(1, 5), 1),
+            "Sales": random.randint(10, 500)
+        })
+    return pd.DataFrame(data)
+
+df = load_data()
+
+# --- Sidebar Filters ---
+with st.sidebar:
+    st.title("🔍 Filters")
+    selected_categories = st.multiselect(
+        "Categories", df["Category"].unique().tolist(),
+        default=df["Category"].unique().tolist()  # All selected by default
+    )
+    price_range = st.slider(
+        "Price Range", float(df["Price"].min()), float(df["Price"].max()),
+        (float(df["Price"].min()), float(df["Price"].max()))  # Default: full range
+    )
+
+# Apply filters
+filtered = df[
+    (df["Category"].isin(selected_categories)) &
+    (df["Price"].between(price_range[0], price_range[1]))
+]
+
+# --- Title and Metrics ---
+st.title("📊 Product Data Explorer")
+
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("Products", len(filtered),
+              f"{len(filtered) - len(df)}" if len(filtered) != len(df) else "All")
+with col2:
+    st.metric("Avg Price", f"${filtered['Price'].mean():.2f}")
+with col3:
+    st.metric("Avg Rating", f"{filtered['Rating'].mean():.1f} ⭐")
+with col4:
+    st.metric("Total Sales", f"{filtered['Sales'].sum():,}")
+
+st.divider()
+
+# --- Tabbed Content ---
+tab_charts, tab_scatter, tab_raw = st.tabs(
+    ["📊 Charts", "🔵 Product Scatter", "🗑️ Raw Data"]
+)
+
+with tab_charts:
+    chart_type = st.radio(
+        "Chart type", ["Bar", "Line", "Area"], horizontal=True
+    )
+
+    # Group data for charting
+    chart_data = filtered.groupby("Category")["Sales"].sum().reset_index()
+
+    if chart_type == "Bar":
+        st.bar_chart(chart_data, x="Category", y="Sales")
+    elif chart_type == "Line":
+        st.line_chart(chart_data, x="Category", y="Sales")
+    else:
+        st.area_chart(chart_data, x="Category", y="Sales")
+
+with tab_scatter:
+    fig = px.scatter(
+        filtered, x="Price", y="Rating", color="Category",
+        size="Sales", hover_name="Product",
+        title="Price vs Rating by Category"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+with tab_raw:
+    st.subheader(f"Filtered Data ({len(filtered)} products)")
+    st.dataframe(
+        filtered.style.highlight_max(subset=["Sales", "Rating"], color="#d4edda"),
+        use_container_width=True
+    )
+
+Run it:
+pip install plotly  # If not already installed
+streamlit run data_display.py
+
+This is the lesson everything has been building toward. You’re about to combine everything you’ve learned - Streamlit widgets, session state, API calls, layout - into the kind of interface that powers ChatGPT, Claude, and every AI chatbot you’ve used.
+
+The architecture is simpler than you might expect. A chat interface is just: a list of messages stored in session state, a text input for the user, an API call to get the AI’s response, and a loop that re-renders the full history on every run.
+Chat Components
+
+Streamlit has purpose-built components for chat interfaces:
+# Display a message from the user
+with st.chat_message("user"):
+    st.write("What is Python?")
+
+# Display a message from the assistant
+with st.chat_message("assistant"):
+    st.write("Python is a high-level programming language...")
+
+# Text input pinned to the bottom of the page
+prompt = st.chat_input("Ask me anything...")
+
+st.chat_message() creates a message bubble with an avatar (user or assistant icon). st.chat_input() creates a text input pinned to the bottom of the screen - just like a real chat app.
+The Chat History Pattern
+
+Here’s why session state is essential. Streamlit re-runs the entire script on every interaction. When the user sends a message, the script re-runs, and all previously displayed messages vanish unless you explicitly re-render them.
+
+The solution: store all messages in session state and re-render them on every run:
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state["messages"] = []
+
+# Re-render ALL previous messages on every run
+for message in st.session_state["messages"]:
+    with st.chat_message(message["role"]):  # "user" or "assistant"
+        st.write(message["content"])
+
+# Handle new user input
+if prompt := st.chat_input("Ask me anything..."):  # := is the walrus operator
+    # Add user message to history
+    st.session_state["messages"].append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.write(prompt)
+
+    # Get AI response and add to history
+    response = get_ai_response(prompt)
+    st.session_state["messages"].append({"role": "assistant", "content": response})
+    with st.chat_message("assistant"):
+        st.write(response)
+
+The := is Python’s walrus operator - it assigns the value of st.chat_input() to prompt and simultaneously checks if it’s truthy (not None or empty). It’s equivalent to:
+prompt = st.chat_input("Ask me anything...")
+if prompt:
+    ...
+Streaming Responses
+
+Real AI APIs stream responses token-by-token. Streamlit’s st.write_stream() handles this elegantly:
+import openai
+
+client = openai.OpenAI(api_key=api_key)
+
+stream = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=st.session_state["messages"],
+    stream=True  # Enable streaming
+)
+
+# st.write_stream displays each chunk as it arrives
+with st.chat_message("assistant"):
+    response = st.write_stream(stream)  # Returns the full text when done
+
+st.write_stream() accepts a generator (an object that yields chunks of text) and displays each chunk as it arrives — creating the typing effect you see in ChatGPT.
+API Keys: st.secrets and Input Fields
+
+For development, you can accept API keys via a sidebar input:
+with st.sidebar:
+    api_key = st.text_input("OpenAI API Key", type="password")
+
+The type="password" masks the input so the key isn’t visible on screen.
+
+For deployed apps, use st.secrets — Streamlit’s built-in secret management:
+# In .streamlit/secrets.toml:
+# OPENAI_API_KEY = "sk-..."
+
+api_key = st.secrets["OPENAI_API_KEY"]
+
+Never hardcode API keys in your source code.
+Mock Responses for Students Without API Keys
+
+Not everyone will have an OpenAI API key. A good AI interface app should include a mock fallback:
+import time
+
+def mock_stream(prompt):
+    """Generate a fake streaming response for demo purposes."""
+    response = f"This is a mock response to: '{prompt}'. In a real app, this would come from an AI model like GPT or Claude."
+    for word in response.split():
+        yield word + " "
+        time.sleep(0.05)  # Simulate streaming delay
+
+This lets students build and test the full chat interface without needing an API key.
+
+84
+Community
+2
+Learning
+Events
+8
+Chat
+Coding Temple logo
+
+Learning
+
+Module 6: Web Essentials & Streamlit
+Module
+
+Invite Only
+
+    Practice Exercise
+
+    Module: Fetch API & Async/Await
+    About This Module
+
+    Philosophy: Week 1 gives web literacy - HTML structure, CSS basics, JavaScript interactivity, and how the browser communicates with servers. Week 2 gives Streamlit - the Python-native UI tool students will use to build AI interfaces for the rest of the course. By the end, students have a running Streamlit app connected to their Module 5 FastAPI backend with at least one AI-powered feature.
+
+    Duration: 2 Weeks (40 hours)
+
+    Sections
+        How the Web Works (DNS, HTTP, Client/Server)
+        HTML Structure & Semantic Elements
+        CSS Essentials (Selectors, Box Model, Flexbox)
+        JavaScript Basics (Variables, Functions, DOM)
+        Fetch API & Async/Await
+        Connecting Frontend to Backend
+        Knowledge Check: Web & UI Fundamentals Check
+        What is Streamlit? (Python-Native UI)
+        Streamlit Layout & Components
+        User Input, Forms & State Management
+        Displaying Data: Tables, Charts, Metrics
+        Connecting Streamlit to FastAPI
+        Building an AI-Powered Interface
+        Module Project: AI Dashboard (5-minute presentation)
+
+
+    Book an 1v1 Meeting with AI Software Engineering Student Support!
+
+    🔗 Zoom Meeting Link (15 minute)
+
+    🔗 Zoom Meeting Link (30 minute)
+
+    Curriculum
+    How the Web Works
+    HTML Structure & Semantic Elements
+    CSS Essentials
+    JavaScript Basics
+    Fetch API & Async/Await
+    Connecting Frontend to Backend
+    Knowledge Check: Web & UI Fundamentals
+    What is Streamlit?
+    Streamlit Layout & Components
+    User Input, Forms & State Management
+    Displaying Data: Tables, Charts, Metrics
+    Connecting Streamlit to FastAPI
+    Building an AI-Powered Interface
+    1/8
+    Module Project: AI Dashboard
+    0/1
+
+Guided Example
+
+Curriculum
+
+Module 6 - Web Essentials & Streamlit
+
+Create ai_chat.py - a complete AI chat interface:
+import streamlit as st
+import time
+
+st.set_page_config(page_title="AI Chat", page_icon="🤖", layout="centered")
+
+# --- Session State Init ---
+if "messages" not in st.session_state:
+    st.session_state["messages"] = []
+
+# --- Sidebar: Settings ---
+with st.sidebar:
+    st.title("⚙️ Settings")
+
+    api_key = st.text_input("OpenAI API Key", type="password",
+                             placeholder="sk-... (optional)")
+
+    system_prompt = st.text_area(
+        "System Prompt",
+        value="You are a helpful AI assistant for students learning AI engineering.",
+        help="This sets the AI's personality and behavior."
+    )
+
+    model = st.selectbox("Model", ["gpt-3.5-turbo", "gpt-4", "gpt-4o-mini"])
+
+    st.divider()
+
+    use_real_api = api_key and len(api_key) > 10
+    if use_real_api:
+        st.success("Using real OpenAI API")
+    else:
+        st.info("No API key — using mock responses")
+
+    st.divider()
+    st.metric("Messages", len(st.session_state["messages"]))
+
+    if st.button("🗑️ Clear Chat"):
+        st.session_state["messages"] = []
+        st.rerun()
+
+# --- Mock Response Generator ---
+def mock_stream(prompt):
+    """Fake streaming response for demo purposes."""
+    responses = {
+        "default": f"That's a great question about '{prompt[:50]}'. As an AI engineering student, you'll encounter this topic in upcoming modules. The key concepts involve understanding how models process input, generate responses, and handle context. Keep exploring and building!"
+    }
+    response = responses["default"]
+    for word in response.split():
+        yield word + " "
+        time.sleep(0.03)
+
+# --- Real API Call ---
+def real_stream(messages, api_key, model):
+    """Stream from OpenAI API."""
+    import openai  # Import here so app works without openai installed
+    client = openai.OpenAI(api_key=api_key)
+    stream = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "system", "content": system_prompt}] + messages,
+        stream=True
+    )
+    for chunk in stream:
+        if chunk.choices[0].delta.content:  # Some chunks have no content
+            yield chunk.choices[0].delta.content
+
+# --- Main Chat Interface ---
+st.title("🤖 AI Chat")
+
+# Re-render all previous messages
+for message in st.session_state["messages"]:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+
+# Handle new input
+if prompt := st.chat_input("Ask me anything..."):
+    # Display and store user message
+    st.session_state["messages"].append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.write(prompt)
+
+    # Generate and stream assistant response
+    with st.chat_message("assistant"):
+        if use_real_api:
+            try:
+                response = st.write_stream(
+                    real_stream(st.session_state["messages"], api_key, model)
+                )
+            except Exception as e:
+                response = f"API Error: {str(e)}"
+                st.error(response)
+        else:
+            response = st.write_stream(mock_stream(prompt))
+
+    # Store assistant response
+    st.session_state["messages"].append({"role": "assistant", "content": response})
+
+Run it:
+streamlit run ai_chat.py
+What You Should See
+
+    A clean chat interface with a text input pinned to the bottom
+    A sidebar with API key input (masked), system prompt, model selector, message count, and Clear button
+    Type a message - it appears in a user bubble, then the AI response streams in word by word
+    Chat history persists as you continue the conversation
+    Clear chat resets everything
+
+Without an API key, you get mock responses. With one, you get real AI responses streamed in real-time.
+Key Patterns
+
+History re-rendering: The for message in st.session_state["messages"] loop at the top displays all previous messages. Without this, each re-run would show a blank page.
+
+Walrus operator (:=): if prompt := st.chat_input(...) assigns and checks in one line. It’s a Python 3.8+ feature you’ll see in many Streamlit examples.
+
+Stream generator: Both mock_stream and real_stream are generator functions that yield text chunks. st.write_stream() consumes these generators and displays each chunk as it arrives.
+
+Mock fallback: The app works with or without an API key. This is good practice for any demo or educational app.
+
+linked list stack queues
+ed121@Ed1217795 MINGW64 ~
+Learning Objectives
+
+By the end of this lesson, you will be able to:
+
+    Explain how a linked list works and how it differs from a Python list
+    Implement a basic linked list with insert and search operations
+    Define stacks and queues and explain their access patterns (LIFO vs. FIFO)
+    Identify real-world situations where each data structure is the right choice
+
+So far, you’ve worked with Python’s built-in data structures: lists, dictionaries, sets, and tuples. These are powerful and cover most everyday needs. But they’re not the only way to organize data, and understanding alternatives helps you make better design decisions and helps you understand what’s happening inside the tools and libraries you’ll use.
+
+This lesson introduces three foundational data structures: linked lists, stacks, and queues. You won’t use these every day in AI engineering, but understanding them serves two purposes: they show up in technical interviews, and they appear inside the libraries and algorithms you’ll work with.
+Linked Lists: A Chain of Connected Nodes
+
+Imagine a scavenger hunt. You get a first clue that says “Go to the library.” At the library, you find a note that says “The secret word is PYTHON. Next clue: go to the park.” At the park: “The secret word is DATA. Next clue: go to the coffee shop.” And so on.
+
+Each stop has two things: some content (the secret word) and a pointer to the next stop (where to go next). You can only follow the chain forward, you can’t jump to the 5th stop without visiting stops 1 through 4 first.
+
+This is exactly how a linked list works. Each element (called a node) stores a value and a reference (pointer) to the next node.
+
+How this differs from a Python list:
+
+Operation
+	
+
+Python List
+	
+
+Linked List
+
+Access element by index
+	
+
+O(1) - instant
+	
+
+O(n) - must traverse from start
+
+Insert at the beginning
+	
+
+O(n) - shifts all elements
+	
+
+O(1) - just update head pointer
+
+Insert in the middle
+	
+
+O(n) - shifts elements
+	
+
+O(1) - update two pointers
+
+Search for a value
+	
+
+O(n)
+	
+
+O(n)
+
+Memory
+	
+
+Contiguous block
+	
+
+Scattered nodes + pointer overhead
+
+The key insight: Python lists are great for reading data by position. Linked lists are great for inserting and deleting data. Neither is universally better.
+
+
+Stacks: Last In, First Out (LIFO)
+
+Think of a stack of plates at a buffet. You can only add a plate to the top, and you can only take a plate from the top.
+
+A stack follows the same rule: the last item added is the first one removed. This is called LIFO, Last In, First Out.
+
+The two core operations:
+
+    Push: Add an item to the top of the stack
+    Pop: Remove and return the item from the top of the stack
+
+Where stacks appear in the real world:
+
+    Your browser’s back button - Each page you visit is pushed onto the stack. Click “back” and the most recent page is popped off.
+    Undo/redo in text editors - Each action is pushed onto an undo stack. Ctrl+Z pops the most recent action.
+    Python’s function call stack - When function A calls function B, which calls function C, Python uses a stack to track where to return.
+
+ai-fdfdfd27-5f95-4e37-ad07-b7bcce8bc7f5.png
+Queues: First In, First Out (FIFO)
+
+Think of a line at a grocery store. The first person in line is the first person served. New people join at the back.
+
+A queue follows the same rule: the first item added is the first one removed. This is called FIFO, First In, First Out.
+
+The two core operations:
+
+    Enqueue: Add an item to the back of the queue
+    Dequeue: Remove and return the item from the front of the queue
+
+Where queues appear in AI engineering:
+
+    Task queues - When your API receives more requests than it can process, incoming requests are placed in a queue.
+    Message queues - Tools like RabbitMQ and Redis use queues to pass tasks between different parts of a system.
+    Background job processing - In Module 5 (FastAPI), you’ll learn about background tasks managed using a queue.
+
+In Python, use collections.deque for queues, it provides O(1) operations for 
+
+
+O.O.P
+
+Learning Objectives
+
+By the end of this lesson, you will be able to:
+
+    Explain what a class is, what an object is, and how they relate to each other
+    Define and use classes with __init__, attributes, and methods
+    Implement inheritance to create specialized versions of a base class
+    Recognize when OOP is the right approach and when simpler code is better
+
+You’ve already used object-oriented programming in this course, even if you didn’t realize it. The LinkedList and Node classes in the last lesson? That was OOP. Every time you’ve used my_list.append() or my_dict.keys(), you’ve been calling methods on objects. Now we’ll understand the system behind all of it.
+
+Object-oriented programming is a way of organizing code around objects, bundles that combine data and the functions that operate on that data.
+Classes and Objects: The Core Idea
+
+A class is a blueprint. An object is something built from that blueprint.
+
+Think of a cookie cutter and cookies. The cookie cutter (class) defines the shape. Each cookie (object) is a specific instance created from that cutter.
+
+In Python:
+class Student:
+    """Blueprint for a student."""
+
+    def __init__(self, name, grade):
+        # These are attributes — data that belongs to each student
+        self.name = name
+        self.grade = grade
+
+    def is_passing(self):
+        # This is a method — a function that belongs to the class
+        return self.grade >= 60
+
+    def __repr__(self):
+        # This controls how the object looks when printed
+        return f"Student(name='{self.name}', grade={self.grade})"
+
+# Creating objects (instances) from the class
+alice = Student("Alice", 92)
+bob = Student("Bob", 55)
+
+print(alice)              # Student(name='Alice', grade=92)
+print(alice.name)         # "Alice" — accessing an attribute
+print(alice.is_passing()) # True — calling a method
+print(bob.is_passing())   # False
+
+Let’s unpack the key pieces:
+
+__init__ is the constructor a special method that runs automatically when you create a new object. It sets up the object’s initial data.
+
+self is Python’s way of referring to the specific object. When alice.is_passing() is called, self inside the method refers to the alice object.
+
+Attributes (self.name, self.grade) are the data each object carries.
+
+Methods (is_passing()) are functions that belong to the class. They can access and modify the object’s attributes through self.
+Why OOP? Organizing Complexity
+
+Without OOP:
+alice_name = "Alice"
+alice_grade = 92
+bob_name = "Bob"
+bob_grade = 55
+
+def is_passing(grade):
+    return grade >= 60
+
+This works for two students. But what about 500? You’d have 1,000 variables.
+
+With OOP:
+students = [
+    Student("Alice", 92),
+    Student("Bob", 55),
+    Student("Charlie", 78),
+]
+
+failing = [s for s in students if not s.is_passing()]
+
+The data and behavior are bundled together. Clean, scalable, maintainable.
+
+
+Inheritance: Building on What Exists
+
+Sometimes you need a specialized version of a class. Rather than writing from scratch, you inherit from an existing class.
+class Person:
+    """Base class for any person."""
+
+    def __init__(self, name, email):
+        self.name = name
+        self.email = email
+
+    def introduce(self):
+        return f"Hi, I'm {self.name}."
+
+class Student(Person):
+    """A student is a person with a grade."""
+
+    def __init__(self, name, email, grade):
+        super().__init__(name, email)  # Call the parent's __init__
+        self.grade = grade             # Add student-specific data
+
+    def is_passing(self):
+        return self.grade >= 60
+
+    def introduce(self):
+        base = super().introduce()
+        status = "passing" if self.is_passing() else "needs support"
+        return f"{base} I'm a student, currently {status}."
+
+class Instructor(Person):
+    """An instructor is a person with a course."""
+
+    def __init__(self, name, email, course):
+        super().__init__(name, email)
+        self.course = course
+
+    def introduce(self):
+        base = super().introduce()
+        return f"{base} I teach {self.course}."
+
+alice = Student("Alice", "alice@school.com", 92)
+prof = Instructor("Dr. Smith", "smith@school.com", "AI Foundations")
+
+print(alice.introduce())
+# Hi, I'm Alice. I'm a student, currently passing.
+
+print(prof.introduce())
+# Hi, I'm Dr. Smith. I teach AI Foundations.
+
+What’s happening:
+
+    Person is the parent class. It defines what every person has.
+    Student and Instructor are child classes. They inherit from Person but add their own attributes and override introduce().
+    super().__init__(name, email) calls the parent’s constructor so you don’t repeat setup code.
+
+When NOT to Use OOP
+
+OOP is a tool, not a religion. Sometimes it adds unnecessary complexity:
+
+Simple scripts - Quick data-cleaning script that runs once? Functions are fine.
+
+Stateless operations - If a function doesn’t need to remember anything between calls, it doesn’t need to be a method.
+
+Data-only structures - Just bundling data? Consider a dictionary or dataclass instead.
+
+A good rule of thumb: use OOP when you have data and behavior that belong together, especially when you’ll create multiple instances or need to build specialized versions through inheritance.
+Where You’ll Use OOP in This Course
+
+    This module’s project: A DataPipeline class that loads, cleans, analyzes, and visualizes data
+    Module 3: SQLAlchemy models are classes, each table is a class, each row is an object
+    Module 5: FastAPI uses Pydantic models (classes) for data validation
+    Module 7: Classes to manage vector database connections and search logic
+
+
+
