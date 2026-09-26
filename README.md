@@ -8,9 +8,9 @@ A collection of programs designed to build applied AI capabilities and validate 
 
 pre-trained AI model into your Python program.[hard coded search content]
 
-Think of it like:
 
-Your Python program
+
+ Python program
        │
        ▼
 SentenceTransformer
