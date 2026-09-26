@@ -76,7 +76,7 @@ def calculate_scores(
     query: str,
     documents: list[tuple[str, str]],
     vectorizer: TfidfVectorizer,
-) -> list[tuple[float, str, str]]:
+    ) -> list[tuple[float, str, str]]:
     """Return documents ranked by similarity to the query."""
 
     document_texts = [text for _, text in documents]
@@ -87,13 +87,13 @@ def calculate_scores(
     similarities = cosine_similarity(
         query_vector,
         document_vectors,
-    )[0]
+        )[0]
 
     results = [
         (float(score), category, document)
         for score, (category, document)
         in zip(similarities, documents)
-    ]
+        ]
 
     return sorted(results, reverse=True)
 
@@ -103,7 +103,7 @@ def display_results(
     relevant_category: str,
     scored_documents: list[tuple[float, str, str]],
     thresholds: tuple[float, ...],
-) -> None:
+    ) -> None:
     """Display results for each similarity threshold."""
 
     print(f'\nQuery: "{query}"')
@@ -114,18 +114,18 @@ def display_results(
             (score, category, document)
             for score, category, document in scored_documents
             if score >= threshold
-        ]
+            ]
 
         missed_relevant_results = [
             (score, category, document)
             for score, category, document in scored_documents
             if category == relevant_category and score < threshold
-        ]
+            ]
 
         print(
             f"\n  Threshold {threshold:.1f}: "
             f"{len(passing_results)} results"
-        )
+            )
 
         if passing_results:
             for score, category, document in passing_results:
