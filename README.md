@@ -424,4 +424,83 @@ This is the foundation of:
 
     Recommendation systems
 
-The application is essentially a small retrieval system—the same retrieval layer that can later be connected to an LLM for RAG.
+The application is essentially a small retrieval system.
+the same retrieval layer that can later be connected to an LLM for RAG.
+________________________________________________________________________
+
+## Prompt Workshop
+
+USER TASKS
+↓
+write a vague bad prompt
+↓
+write a specific good prompt
+↓
+send both to Llama 3.2
+↓
+compare outputs
+↓
+observe how prompt quality affects results
+Task 1 — Code Explanation
+
+Bad prompt:
+
+    Explain st.session_state.
+
+The model produced an incorrect explanation, even confusing Streamlit with Scikit-learn.
+
+Good prompt:
+
+    In Streamlit, explain what st.session_state does. Explain it to a beginner, describe why it is needed when Streamlit reruns the script, and provide a small counter example.
+
+The good prompt produced a much more accurate explanation.
+Task 2 — Data Formatting
+
+The bad prompt allowed the model to invent structure and information.
+
+The good prompt specified:
+
+    JSON array only
+
+    Required fields: title, priority, status
+
+    Consistent status values
+
+This produced predictable structured output.
+Task 3 — System Prompt
+
+The Course Study Assistant was constrained to:
+
+    Use provided context only
+
+    Admit when the answer isn't in the notes
+
+    Stay under 150 words
+
+    Identify the source document
+
+What the experiment shows
+
+Prompt quality affects model behavior.
+
+Vague prompt
+↓
+more freedom for the model to interpret the task
+↓
+higher chance of irrelevant or hallucinated information
+
+Specific prompt + framing/examples
+↓
+clearer instructions
+↓
+more predictable output
+
+The experiment also shows that prompt engineering cannot completely compensate for model limitations.
+
+Llama 3.2 may still produce incorrect information.
+good prompting should be combined with grounded context, validation, and retrieval.
+
+Prompt engineering pattern:
+
+Frame → Specify → Example → Constrain → Validate
+
