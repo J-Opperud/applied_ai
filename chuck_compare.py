@@ -88,7 +88,7 @@ def paragraph_chunks(text):
         "WRAPPING PACKAGES",
         "CLEANING",
         "MAINTENANCE"
-    }
+        }
 
     for line in lines:
         line = line.strip()
@@ -131,7 +131,7 @@ def embed_chunks(model, chunks):
         chunks,
         convert_to_numpy=True,
         normalize_embeddings=True
-    )
+        )
 
 
 # ---------------------------------------------------------
@@ -143,7 +143,7 @@ def search(query, model, chunks, embeddings, top_k=2):
         [query],
         convert_to_numpy=True,
         normalize_embeddings=True
-    )[0]
+        )[0]
 
     # Because embeddings are normalized, dot product = cosine similarity
     scores = np.dot(embeddings, query_embedding)
@@ -205,7 +205,7 @@ def main():
     paragraph_embeddings = embed_chunks(
         model,
         paragraph_based_chunks
-    )
+        )
 
     # -----------------------------------------------------
     # Queries
@@ -215,7 +215,7 @@ def main():
         "How should the hand wrap station be operated?",
         "What safety precautions should be followed?",
         "How should the hand wrap station be cleaned and maintained?"
-    ]
+        ]
 
     # Store scores so we can compare strategies later
     fixed_scores_all = []
@@ -238,7 +238,7 @@ def main():
             fixed_chunks,
             fixed_embeddings,
             top_k=2
-        )
+            )
 
         print("\n--- FIXED-SIZE CHUNKS ---")
 
@@ -257,14 +257,14 @@ def main():
             paragraph_based_chunks,
             paragraph_embeddings,
             top_k=2
-        )
+            )
 
         print("\n--- PARAGRAPH-BASED CHUNKS ---")
 
         for number, (chunk, score) in enumerate(
             paragraph_results,
             start=1
-        ):
+            ):
 
             print(f"\nResult {number}")
             print(f"Score: {score:.4f}")
