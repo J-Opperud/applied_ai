@@ -12,7 +12,7 @@ st.set_page_config(
     page_title="Semantic Search",
     page_icon="🔍",
     layout="wide",
-)
+    )
 
 
 # ============================================================
@@ -26,7 +26,7 @@ def get_collection():
 
     return client.get_or_create_collection(
         name="course_docs"
-    )
+        )
 
 
 collection = get_collection()
@@ -57,7 +57,7 @@ def load_and_chunk(directory):
             paragraph.strip()
             for paragraph in content.split("\n\n")
             if paragraph.strip()
-        ]
+            ]
 
         for index, paragraph in enumerate(paragraphs):
             chunks.append(
@@ -87,7 +87,7 @@ def index_documents():
         documents=[
             chunk["text"]
             for chunk in chunks
-        ],
+            ],
         metadatas=[
             {
                 "source": chunk["source"],
@@ -118,7 +118,7 @@ def get_sources():
 
     results = collection.get(
         include=["metadatas"]
-    )
+        )
 
     return sorted(
         {
@@ -139,11 +139,11 @@ def get_total_documents(selected_sources):
                 }
             },
             include=[],
-        )
+            )
     else:
         results = collection.get(
             include=[]
-        )
+            )
 
     return len(results["ids"])
 
@@ -167,8 +167,8 @@ def search_documents(query, n_results, selected_sources=None):
         query_kwargs["where"] = {
             "source": {
                 "$in": selected_sources
+                }
             }
-        }
 
     return collection.query(**query_kwargs)
 
@@ -223,13 +223,13 @@ def display_results(results, show_similar_button=True):
                 st.write(
                     f"**{metadata['source']}** "
                     f"— chunk {metadata['chunk_index']}"
-                )
+                    )
 
             with col_score:
                 st.write(
                     f"{relevance} "
                     f"(dist: {distance:.3f})"
-                )
+                    )
 
             # ------------------------------------------------
             # Preview
@@ -253,7 +253,7 @@ def display_results(results, show_similar_button=True):
                 if st.button(
                     "🔎 Similar to this",
                     key=f"similar_{index}",
-                ):
+                    ):
                     st.session_state["similar_query"] = doc
                     st.rerun()
 
@@ -275,7 +275,7 @@ with st.sidebar:
     if st.button(
         "🔄 Re-index Documents",
         use_container_width=True,
-    ):
+        ):
 
         chunk_count, source_count = index_documents()
 
@@ -283,11 +283,11 @@ with st.sidebar:
             st.success(
                 f"Indexed {chunk_count} chunks "
                 f"from {source_count} files."
-            )
+                )
         else:
             st.warning(
                 "No .txt or .md files found in docs/."
-            )
+                )
 
     # --------------------------------------------------------
     # Database Information
@@ -296,7 +296,7 @@ with st.sidebar:
     st.metric(
         "Documents in DB",
         collection.count(),
-    )
+        )
 
     # --------------------------------------------------------
     # Source Filter
@@ -310,7 +310,7 @@ with st.sidebar:
         "Search only these files",
         options=sources,
         placeholder="All files",
-    )
+        )
 
     # --------------------------------------------------------
     # Bonus: Unique Source Count
@@ -319,7 +319,7 @@ with st.sidebar:
     st.metric(
         "Unique source files",
         len(sources),
-    )
+        )
 
     # --------------------------------------------------------
     # Result Count
@@ -330,7 +330,7 @@ with st.sidebar:
         min_value=1,
         max_value=10,
         value=5,
-    )
+        )
 
 
 # ============================================================
@@ -342,7 +342,7 @@ st.title("🔍 Semantic Search")
 st.write(
     "Search your course documents by meaning, "
     "not just keywords."
-)
+    )
 
 
 # ============================================================
@@ -357,7 +357,7 @@ with col_search:
         "Search your documents",
         placeholder="How does authentication work?",
         label_visibility="collapsed",
-    )
+        )
 
 with col_button:
 
@@ -365,7 +365,7 @@ with col_button:
         "🔍 Search",
         use_container_width=True,
         type="primary",
-    )
+        )
 
 
 # ============================================================
@@ -378,7 +378,7 @@ if search_clicked:
 
         st.warning(
             "Please enter a search question."
-        )
+            )
 
         st.stop()
 
@@ -387,7 +387,7 @@ if search_clicked:
         st.info(
             "No documents are indexed yet. "
             "Click 'Re-index Documents' in the sidebar."
-        )
+            )
 
         st.stop()
 
@@ -396,14 +396,14 @@ if search_clicked:
         query=query,
         n_results=n_results,
         selected_sources=selected_sources,
-    )
+        )
 
     documents = results["documents"][0]
 
     # Count documents available under current filter
     total_documents = get_total_documents(
         selected_sources
-    )
+        )
 
     # --------------------------------------------------------
     # Result Count Display
@@ -412,7 +412,7 @@ if search_clicked:
     st.subheader(
         f"Showing {len(documents)} "
         f"of {total_documents} total documents"
-    )
+        )
 
     # --------------------------------------------------------
     # Display Results
@@ -433,12 +433,12 @@ if "similar_query" in st.session_state:
 
     st.subheader(
         "🔎 Similar Documents"
-    )
+        )
 
     st.caption(
         "Searching for documents similar "
         "to the selected result."
-    )
+        )
 
     if collection.count() > 0:
 
@@ -446,21 +446,21 @@ if "similar_query" in st.session_state:
             query=similar_query,
             n_results=n_results,
             selected_sources=selected_sources,
-        )
+            )
 
         similar_documents = (
             similar_results["documents"][0]
-        )
+            )
 
         st.write(
             f"Showing {len(similar_documents)} "
             f"similar results"
-        )
+            )
 
         display_results(
             similar_results,
             show_similar_button=False,
-        )
+            )
 
 
 # ============================================================
@@ -470,9 +470,9 @@ if "similar_query" in st.session_state:
 if (
     collection.count() == 0
     and not search_clicked
-):
+    ):
 
     st.info(
         "👈 Click 'Re-index Documents' in the sidebar "
         "to load your documents first."
-    )
+        )
