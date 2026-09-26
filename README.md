@@ -235,3 +235,86 @@ recommendation systems
 
 document search and knowledge bases
 ______________________________________________________
+
+## knowledge_base
+
+Course notes
+    │
+    ▼
+15+ documents
+    │
+    ├── id
+    ├── document text
+    └── metadata
+          ├── module
+          └── topic
+    │
+    ▼
+ChromaDB persistent collection
+    │
+    ▼
+search(query, module=None)
+    │
+    ├── semantic search
+    ├── optional metadata filter
+    └── top 5 results
+
+- Persistent ChromaDB:
+    client = chromadb.PersistentClient(path="./chroma_db")
+
+
+- makes the script safe to run repeatedly:
+    collection = client.get_or_create_collection(
+        name="my_knowledge"
+    )
+
+ - documents:
+    "id"
+    "text"
+    "metadata"
+    metadata contains:
+
+    {
+        "module": "...",
+        "topic": "..."
+    }
+
+- Upsert execute the script five times, you don't get five copies of every document: 
+    collection.upsert(...)  
+
+- search function:
+
+    collection.query(
+        query_texts=["How can I protect an API from attacks?"],
+        n_results=5,
+        where={"module": "5"},
+    )
+
+                      Query
+                        │
+                        ▼
+                ┌─────────────────┐
+                │ Metadata filter │
+                │   module = 5    │
+                └────────┬────────┘
+                        │
+                        ▼
+                ┌─────────────────┐
+                │ Semantic search │
+                └────────┬────────┘
+                         │
+                         ▼
+                       Top
+
+
+- robustness 
+    if not query.strip():
+        raise ValueError("Query cannot be empty.")
+
+
+The applied-AI connection
+
+A simple ChromaDB exercise, architecturally building the first half of a RAG system.
+
+documents → embeddings → retrieval → metadata filtering.
+____________________________________________________________________________
