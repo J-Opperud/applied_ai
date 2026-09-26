@@ -39,7 +39,7 @@ all-MiniLM-L6-v2
 - selects the highest scores.
     top_results = similarities.topk(k=result_count)
 
-- turns those results into the human-readable output required by the assignment.
+- turns those results into the human-readable output.
     for rank, (score, sentence) in enumerate(results, start=1):
         print(f"  {rank}. [{score:.4f}] {sentence}")
 
