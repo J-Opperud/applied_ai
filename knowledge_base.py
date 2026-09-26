@@ -190,7 +190,7 @@ def create_collection():
 
     collection = client.get_or_create_collection(
         name=COLLECTION_NAME
-    )
+        )
 
     return collection
 
@@ -201,7 +201,7 @@ def load_documents(collection):
         ids=[document["id"] for document in DOCUMENTS],
         documents=[document["text"] for document in DOCUMENTS],
         metadatas=[document["metadata"] for document in DOCUMENTS],
-    )
+        )
 
 
 def search(collection, query, module=None):
@@ -222,7 +222,7 @@ def search(collection, query, module=None):
     query_kwargs = {
         "query_texts": [query],
         "n_results": 5,
-    }
+        }
 
     if module is not None:
         query_kwargs["where"] = {"module": str(module)}
@@ -240,7 +240,7 @@ def display_results(results):
     for rank, (doc_id, document, distance, metadata) in enumerate(
         zip(ids, documents, distances, metadatas),
         start=1,
-    ):
+        ):
         print(f"\n{rank}. {doc_id}")
         print(f"   Distance: {distance:.4f}")
         print(f"   Module:   {metadata['module']}")
@@ -258,7 +258,7 @@ def run_demo(collection):
     results = search(
         collection,
         "How do applications communicate over the internet?",
-    )
+        )
     display_results(results)
 
     print("\n" + "=" * 60)
@@ -269,7 +269,7 @@ def run_demo(collection):
         collection,
         "How can I protect an API from attacks?",
         module="5",
-    )
+        )
     display_results(results)
 
     print("\n" + "=" * 60)
@@ -279,7 +279,7 @@ def run_demo(collection):
     results = search(
         collection,
         "How can software stop someone from abusing an endpoint?",
-    )
+        )
     display_results(results)
 
 
