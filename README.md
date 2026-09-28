@@ -505,10 +505,10 @@ Prompt engineering pattern:
 Frame → Specify → Example → Constrain → Validate
 _________________________________________________________
  ## injection_defense
-d
-esign principle  defense in depth
 
-Input validator
+Design principle defense in depth
+
+Input validator:
 
 - Normalize the query for case-insensitive matching.
 
@@ -518,7 +518,7 @@ Input validator
 
 Avoid overblocking ordinary RAG questions.
 
-Output validator
+Output validator:
 
 - Treat model output as untrusted too.
 
@@ -526,7 +526,7 @@ Output validator
 
 - Return (bool, list[str]) so the caller knows what was flagged.
 
-System-prompt template
+System-prompt template:
 
 - Establish role.
 
@@ -536,19 +536,24 @@ System-prompt template
 
 - Constrain response length.
 
-re.IGNORECASE handles IGNORE PREVIOUS, Ignore Previous, etc.
 
-Regex families are broader than checking for exact phrases.
+re.IGNORECASE 
+- handles IGNORE PREVIOUS, Ignore Previous, etc.
 
-Final constants keep security-sensitive configuration centralized.
+Regex families:
+- better than checking for exact phrases.
 
-dict.fromkeys() removes duplicate output flags without losing ordering.
+Final constants:
+- keep security-sensitive configuration centralized.
 
-Type/empty-string validation handles basic edge cases.
+dict.fromkeys() 
+- removes duplicate output flags without losing ordering.
 
-build_system_prompt() prevents every caller from independently constructing the prompt.
+build_system_prompt() 
+-  prevents every caller from independently constructing the prompt.
 
-retrieved context is explicitly treated as untrusted data. mportant in RAG because an attacker can put an instruction inside a document.
+retrieved context
+- explicitly treated as untrusted data. Important in RAG system, an attacker can put an instruction inside a document.
 
 _______________________________________________________________________
 
