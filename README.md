@@ -503,4 +503,52 @@ good prompting should be combined with grounded context, validation, and retriev
 Prompt engineering pattern:
 
 Frame → Specify → Example → Constrain → Validate
+_________________________________________________________
+ ## injection_defense
+d
+esign principle  defense in depth
+
+Input validator
+
+- Normalize the query for case-insensitive matching.
+
+- Detect ≥8 recognizable injection families.
+
+- Return (False, reason) on the first match, otherwise (True, "No suspicious patterns detected").
+
+Avoid overblocking ordinary RAG questions.
+
+Output validator
+
+- Treat model output as untrusted too.
+
+- Detect things that should never leak: API-key-like strings, internal URLs/hosts, and system-prompt fragments.
+
+- Return (bool, list[str]) so the caller knows what was flagged.
+
+System-prompt template
+
+- Establish role.
+
+- Delimit retrieved data with <context>.
+
+- Explicitly say context is data, not instructions.
+
+- Constrain response length.
+
+re.IGNORECASE handles IGNORE PREVIOUS, Ignore Previous, etc.
+
+Regex families are broader than checking for exact phrases.
+
+Final constants keep security-sensitive configuration centralized.
+
+dict.fromkeys() removes duplicate output flags without losing ordering.
+
+Type/empty-string validation handles basic edge cases.
+
+build_system_prompt() prevents every caller from independently constructing the prompt.
+
+retrieved context is explicitly treated as untrusted data. mportant in RAG because an attacker can put an instruction inside a document.
+
+_______________________________________________________________________
 
