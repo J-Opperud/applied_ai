@@ -1,10 +1,10 @@
-## overview 
+## Overview 
 A collection of programs designed to build applied AI capabilities and validate concepts for future development.
 
 
 
 
-## course_search.py
+## Course_search
 
 pre-trained AI model into your Python program.[hard coded search content]
 
@@ -236,7 +236,7 @@ recommendation systems
 document search and knowledge bases
 ______________________________________________________
 
-## knowledge_base
+## Knowledge_base
 
 Course notes
     │
@@ -319,7 +319,7 @@ A simple ChromaDB exercise, architecturally building the first half of a RAG sys
 documents → embeddings → retrieval → metadata filtering.
 ____________________________________________________________________________
 
-## search_tool
+## Search_tool
 
  Streamlit semantic search application that uses ChromaDB to search course documents by meaning rather than exact keywords.
 
@@ -504,7 +504,7 @@ Prompt engineering pattern:
 
 Frame → Specify → Example → Constrain → Validate
 _________________________________________________________
- ## injection_defense
+ ## Injection_defense
 
 Design principle defense in depth
 
