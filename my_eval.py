@@ -144,7 +144,7 @@ def create_collection():
 
     collection = client.get_or_create_collection(
         name="evaluation_documents"
-    )
+        )
 
     collection.add(
         ids=[doc["id"] for doc in DOCUMENTS],
@@ -152,8 +152,8 @@ def create_collection():
         metadatas=[
             {"topic": doc["topic"]}
             for doc in DOCUMENTS
-        ],
-    )
+            ],
+        )
 
     return collection
 
@@ -165,8 +165,9 @@ def create_collection():
 def calculate_metrics(
     returned_ids: list[str],
     relevant_ids: list[str],
-) -> tuple[float, float]:
+    ) -> tuple[float, float]:
     """
+    
     Calculate precision and recall for one query.
 
     Precision:
@@ -174,6 +175,7 @@ def calculate_metrics(
 
     Recall:
         Of the relevant documents, how many were returned?
+    
     """
     returned = set(returned_ids)
     relevant = set(relevant_ids)
@@ -184,18 +186,18 @@ def calculate_metrics(
         true_positives / len(returned)
         if returned
         else 0.0
-    )
+        )
 
     recall = (
         true_positives / len(relevant)
         if relevant
         else 0.0
-    )
+        )
 
     return precision, recall
 
 
-# ============================================================================
+
 # EVALUATION
 # ============================================================================
 
@@ -204,7 +206,7 @@ def evaluate(
     n_results: int,
     threshold: float | None = None,
     show_distances: bool = False,
-) -> tuple[float, float]:
+    ) -> tuple[float, float]:
     """
     Evaluate the search system.
 
@@ -223,12 +225,12 @@ def evaluate(
         results = collection.query(
             query_texts=[test_case["query"]],
             n_results=n_results,
-        )
+            )
 
         candidate_ids = results["ids"][0]
         distances = results["distances"][0]
 
-        # ------------------------------------------------------------
+       
         # Optional debugging output
         # ------------------------------------------------------------
 
@@ -242,7 +244,7 @@ def evaluate(
                 print(
                     f"    {doc_id}: "
                     f"distance={distance:.4f}"
-                )
+                    )
 
         # ------------------------------------------------------------
         # Apply optional distance threshold
@@ -259,16 +261,16 @@ def evaluate(
                     distances,
                 )
                 if distance <= threshold
-            ]
+                ]
 
-        # ------------------------------------------------------------
+            
         # Calculate metrics
         # ------------------------------------------------------------
 
         precision, recall = calculate_metrics(
             returned_ids,
             test_case["relevant_ids"],
-        )
+            )
 
         precisions.append(precision)
         recalls.append(recall)
@@ -277,13 +279,13 @@ def evaluate(
             f"Query {index}: "
             f"P={precision * 100:.1f}% "
             f"R={recall * 100:.1f}%"
-        )
+            )
 
         print(f"  Query: {test_case['query']}")
         print(f"  Expected: {test_case['relevant_ids']}")
         print(f"  Returned: {returned_ids}")
 
-    # ------------------------------------------------------------
+    
     # Overall averages
     # ------------------------------------------------------------
 
@@ -294,12 +296,11 @@ def evaluate(
         f"AVERAGE: "
         f"P={average_precision * 100:.1f}% "
         f"R={average_recall * 100:.1f}%"
-    )
+        )
 
     return average_precision, average_recall
 
 
-# ============================================================================
 # EVALUATION RUNNERS
 # ============================================================================
 
@@ -312,15 +313,15 @@ def run_n_results_evaluation(collection):
         print()
         print("=" * 60)
         print(
-            f"=== Evaluation with n_results={n_results} ==="
-        )
+            f"=== Evaluation with n_results={n_results} ===")
+       
         print("=" * 60)
 
         evaluate(
             collection,
             n_results=n_results,
             show_distances=False,
-        )
+            )
 
 
 def run_threshold_evaluation(collection):
@@ -330,7 +331,7 @@ def run_threshold_evaluation(collection):
         {"threshold": 0.7, "n_results": 3},
         {"threshold": 1.0, "n_results": 5},
         {"threshold": 1.5, "n_results": 5},
-    ]
+        ]
 
     for setting in settings:
         threshold = setting["threshold"]
@@ -342,7 +343,7 @@ def run_threshold_evaluation(collection):
             f"=== Evaluation at "
             f"threshold={threshold}, "
             f"n_results={n_results} ==="
-        )
+            )
         print("=" * 60)
 
         evaluate(
@@ -350,7 +351,7 @@ def run_threshold_evaluation(collection):
             n_results=n_results,
             threshold=threshold,
             show_distances=True,
-        )
+            )
 
 
 # ============================================================================
@@ -360,7 +361,7 @@ def run_threshold_evaluation(collection):
 def main():
     collection = create_collection()
 
-    # ------------------------------------------------------------
+   
     # MODE 1: n_results only
     # ------------------------------------------------------------
 
@@ -371,7 +372,7 @@ def main():
 
     run_n_results_evaluation(collection)
 
-    # ------------------------------------------------------------
+    
     # MODE 2: threshold + n_results
     # ------------------------------------------------------------
 
@@ -382,7 +383,7 @@ def main():
 
     run_threshold_evaluation(collection)
 
-    # ------------------------------------------------------------
+   
     # Analysis
     # ------------------------------------------------------------
 
