@@ -557,3 +557,130 @@ retrieved context
 
 _______________________________________________________________________
 
+## Semantic search eval.
+
+Documents
+   ↓
+ChromaDB collection
+   ↓
+Test query
+   ↓
+Semantic search
+   ↓
+Returned document IDs
+   ↓
+Compare against expected IDs
+   ↓
+Precision + Recall
+   ↓
+Repeat at different settings
+   ↓
+Analyze failures
+
+Instead of calculating precision/recall six times.
+- def calculate_metrics(...):
+
+- for n_results in settings:
+    evaluate(collection, n_results)
+
+
+Robust edge cases
+prevent division by zero errors.
+
+- precision = (
+    true_positives / len(returned)
+    if returned
+    else 0.0)
+- recall = (
+    true_positives / len(relevant)
+    if relevant
+    else 0.0)
+
+Ground truth
+
+We tell the program what should be relevant for each query:
+
+{
+    "query": "How do I handle errors in Python?",
+    "relevant_ids": ["doc_2"],
+}
+
+ChromaDB searches the collection
+
+Query:
+How do I handle errors in Python?
+
+doc_2 → distance = 0.6400
+doc_1 → distance = 1.2497
+doc_3 → distance = 1.5215
+
+_results controls how many candidates ChromaDB retrieves.
+
+lower distance means the document is considered more similar.
+
+n_results = 3
+
+Query
+  ↓
+retrieve 3 closest documents
+  ↓
+evaluate those 3
+
+Increase:
+
+n_results = 5
+
+Query
+  ↓
+retrieve 5 closest documents
+  ↓
+evaluate those 5
+
+More results can improve recall, but can also introduce irrelevant documents and reduce precision.
+
+threshold adds another filter
+
+ChromaDB
+   ↓
+5 candidates
+   ↓
+distance <= threshold?
+   ↓
+keep / reject
+
+threshold = 0.7
+
+doc_2 → 0.6400 → KEEP
+doc_1 → 1.2497 → REJECT
+doc_3 → 1.5215 → REJECT
+
+
+Returned: ['doc_2']
+
+Precision = 100%
+Recall    = 100%
+
+compare against expected IDs
+
+
+                    
+Search results ─────>Expected relevant IDs
+                        │
+                     Compare
+                        ↓
+                    What did we miss?
+                        ↓
+                    Precision / Recall
+
+Expected:
+['doc_9', 'doc_10']
+
+Returned:
+['doc_9']
+
+The system found one of two relevant documents.
+
+Precision = 100%
+Recall    = 50%
+
+search result is precise but incomplete.
