@@ -69,7 +69,7 @@ def main() -> None:
             model,
             course_content,
             course_embeddings,
-        )
+            )
 
         print("\nTop 3 results:")
 
