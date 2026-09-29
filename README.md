@@ -3,7 +3,7 @@ A collection of programs designed to build applied AI capabilities and validate 
 
 
 
-
+  
 ## Course_search
 
 pre-trained AI model into your Python program.[hard coded search content]
